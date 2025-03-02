@@ -93,7 +93,7 @@ yarn add graphai
 ## Data Flow Graph
 データフローグラフ（DFG）は、データの流れを定義するJavaScriptオブジェクトです。通常、YAMLファイルで記述され、実行時に読み込まれます。
 
-DFGは、データフロー内の個々のノードを表す一連のネストされたプロパティを含む [node(ノード)](#node)のコレクションで構成されています。各ノードは、一意のキーnodeId（例：node1, node2）で識別され、ノードの動作や他のノードとの関係を決定するいくつかの事前定義されたプロパティ（params, inputs, valueなど）を含むことができます。ノードには、以下で説明する [computed nodes（計算ノード）](#computed-node) と [static nodes（静的ノード）](#static-node), の2種類があります。
+DFGは、データフロー内の個々のノードを表す一連のネストされたプロパティを含む [node(ノード)](#node)のコレクションで構成されています。各ノードは、一意のキー（nodeId（ノードID）例：`node1`, `node2`）で識別され、ノード自身の動作や他のノードとの関係を決定するいくつかの事前定義されたプロパティ（params, inputs, valueなど）を含むことができます。ノードには、以下で説明する [computed nodes（計算ノード）](#computed-node) と [static nodes（静的ノード）](#static-node), の2種類があります。
 
 ### Data Source
 ノード同士のつながりは、「inputs」、「update」、「if」または「while」プロパティを使って、あるノードから別のノードに参照を渡すことで作られます。これらのプロパティの値はデータソースと呼ばれます。
