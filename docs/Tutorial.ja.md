@@ -1,0 +1,532 @@
+# GraphAI Tutorial
+
+## Hello World
+
+GraphAI (https://github.com/receptron/graphai) は、 非プログラマがデータフローを宣言的な言語で記述することでAIアプリケーションを簡単に構築できるようにするオープンソースプロジェクトです。
+
+以下は、GraphAIの "Hello World" です。
+
+```YAML
+version: 0.3
+nodes:
+  llm:
+    agent: openAIAgent
+    params:
+      model: gpt-4o
+    inputs:
+      prompt: Explain ML's transformer in 100 words.
+  output:
+    agent: copyAgent
+    console:
+      after: true
+    inputs:
+      - :llm.choices.$0.message.content
+```
+
+この例には、２つのノードがあります：
+
+1. `llm`: このノードは `openAIAgent` に関連付けられていて、OpenAIの「Chat Completions API」を呼び出します。このエージェントは "Explain ML's transformer in 100 words." というプロンプトを受け取り「Chat Completions API」の結果を出力します。
+2. `output`: このノードは、`llm` から結果を受け取りコンソールに出力します。
+
+`llm`ノードは、はじめからすべての入力データが揃っているのですぐに実行されますが、`output`ノードは `llm`ノードの結果を受け取ってから実行されます。
+
+## Installation
+
+以下のコマンドで "GraphAI client" をインストールし、自分のマシンで試すことができます：
+```
+npm i -g  @receptron/graphai_cli
+```
+プロジェクトフォルダを作成し、ルートディレクトリに環境変数を設定する `.env` ファイルを作成します。以下は、OpenAIのAPIキーを設定する例です。（GeminiやAnthoropic等のAPIを使う場合は別の環境変数を使います）
+```
+OPENAI_API_KEY=sk-...
+```
+次のコマンドを使ってyamlファイルを作成します。 (例： "hello.yaml")
+```
+graphai hello.yaml
+```
+
+yamlのサンプルがあるので参考にしてください： [Graphai Samples](https://github.com/receptron/graphai_samples).
+
+## Computed Node and Static Node
+
+There are two types of nodes in GraphAI, *computed nodes* and *static nodes*.
+
+A computed node is associated with an *agent*, which performs a certain computation. Both nodes in the previous examples are *computed nodes*.
+
+A *static nodes* is a place holder of a value, just like a *variable* in computer languages.
+
+The example below performs the same operation, but uses one *static node*, **prompt**, which holds the value "Explain ML's transformer in 100 words".
+
+```YAML
+version: 0.3
+nodes:
+  prompt:
+    value: Explain ML's transformer in 100 words.
+  llm:
+    agent: openAIAgent
+    params:
+      model: gpt-4o
+    inputs:
+      prompt: :prompt
+  output:
+    agent: copyAgent
+    console:
+      after: true
+    inputs:
+      - :llm.choices.$0.message.content
+```
+
+## Loop
+
+The dataflow graph needs to be acyclic by design, but we added a few control flow mechanisms, such as loop, nesting, if/unless and mapping (of map-reduce). 
+
+Here is a simple application, which uses **loop**.
+
+```YAML
+version: 0.3
+loop:
+  while: :fruits
+nodes:
+  fruits:
+    value: [apple, lemon, banana]
+    update: :shift.array
+  result:
+    value: []
+    update: :reducer
+    isResult: true
+  shift:
+    agent: shiftAgent
+    inputs: 
+      array: [:fruits]
+  prompt:
+    agent: stringTemplateAgent
+    params:
+      template: What is the typical color of ${0}? Just answer the color.
+    inputs: [:shift.item]
+  llm:
+    agent: openAIAgent
+    params:
+      model: gpt-4o
+    inputs: 
+      prompt: [:prompt]
+  reducer:
+    agent: pushAgent
+    inputs:
+      array: :result
+      item: :llm.choices.$0.message.content
+```
+
+1. **fruits**: This static node holds the list of fruits at the begining but updated with the array property of **shift** node after each iteration.
+2. **result**: This static node starts with an empty array, but updated with the value of **reducer** node after each iteration.
+3. **shift**: This node takes the first item from the value from **fruits** node, and output the remaining array and item as properties.
+4. **prompt**: This node creates a prompt by filling the `${0}` of the template string with the item property of the output of **shift** node.
+5. **llm**: This computed node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
+6. **reducer**: This node pushes the content from the output of **llm** node to the value of **result** node.
+
+Please notice that each item in the array will be processed sequentially. To process them concurrently, see the section below. 
+
+## Mapping
+
+Here is a simple application, which uses **map**.
+
+```YAML
+version: 0.3
+nodes:
+  fruits:
+    value: [apple, lemon, banana]
+  map:
+    agent: mapAgent
+    inputs:
+      rows: :fruits
+    isResult: true
+    graph:
+      nodes:
+        prompt:
+          agent: stringTemplateAgent
+          params:
+            template: What is the typical color of ${0}? Just answer the color.
+          inputs: [:row]
+        llm:
+          agent: openAIAgent
+          params:
+            model: gpt-4o
+          inputs: 
+            prompt: [:prompt]
+        result:
+          agent: copyAgent
+          inputs: [:llm.choices.$0.message.content]
+          isResult: true
+```
+
+1. **fruits**: This static node holds the list of fruits.
+2. **map**: This node is associated with **mapAgent**, which performs the mapping, by executing the nested graph for each item for the value of **fruits** node, and outputs the combined results.
+3. **prompt**: This node creates a prompt by filling the `${0}` of the template string with each item of the value of **fruits** node.
+4. **llm**: This node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
+5. **result**: This node retrieves the content property from the output of **llm** node.
+
+Please notice that each item in the array will be processed concurrently.
+
+## ChatBot
+
+Here is a chatbot application using the loop, which allows the user to talk to the LLM until she/he types "/bye".
+
+```YAML
+version: 0.3
+loop:
+  while: :continue
+nodes:
+  continue:
+    value: true
+    update: :checkInput.continue
+  messages:
+    value: []
+    update: :reducer
+  userInput:
+    agent: textInputAgent
+    params:
+      message: "You:"
+  checkInput:
+    agent: propertyFilterAgent
+    params:
+      inspect:
+        - propId: continue
+          notEqual: /bye
+    inputs:
+      - {}
+      - :userInput
+  userMessage:
+    agent: propertyFilterAgent
+    params:
+      inject:
+        - propId: content
+          from: 1
+    inputs:
+      - role: user
+      - :userInput
+  appendedMessages:
+    agent: pushAgent
+    inputs:
+      array: :messages
+      item: :userMessage
+  llm:
+    agent: openAIAgent
+    inputs:
+      messages: :appendedMessages
+  output:
+    agent: stringTemplateAgent
+    params:
+      template: "\e[32mLLM\e[0m: ${0}"
+    console:
+      after: true
+    inputs:
+      - :llm.choices.$0.message.content
+  reducer:
+    agent: pushAgent
+    inputs:
+      array: :appendedMessages
+      item: :llm.choices.$0.message
+```
+
+1. The user is prompted to input a message with "You:".
+2. `userInput` captures the user's input.
+3. `checkInput` evaluates if the input is "/bye". If it is, `continue` is set to `false`, stopping the loop.
+4. `userMessage` formats the user's input as a message with the role "user".
+5. `appendedMessages` appends the user's message to the existing messages array.
+6. `llm` uses the updated messages array to generate a response from the AI model.
+7. `output` formats the AI agent's response and prints it to the console.
+8. `reducer` appends the AI agent's response to the messages array.
+9. The loop continues as long as `continue` is `true`.
+
+## Weather: Function Call and nested graph
+
+Here is an example, which uses the function call capability and nested graph.
+
+```YAML
+version: 0.3
+loop:
+  while: :continue
+nodes:
+  continue:
+    value: true
+    update: :checkInput.continue
+  messages:
+    value:
+      - role: system
+        content: You are a meteorologist. Use getWeather API, only when the user ask for
+          the weather information.
+    update: :reducer
+    isResult: true
+  userInput:
+    agent: textInputAgent
+    params:
+      message: "Location:"
+  checkInput:
+    agent: propertyFilterAgent
+    params:
+      inspect:
+        - propId: continue
+          notEqual: /bye
+    inputs:
+      - {}
+      - :userInput
+  userMessage:
+    agent: propertyFilterAgent
+    params:
+      inject:
+        - propId: content
+          from: 1
+    inputs:
+      - role: user
+      - :userInput
+  messagesWithUserInput:
+    agent: pushAgent
+    inputs:
+      array: :messages
+      item: :userMessage
+    if: :checkInput.continue
+  llmCall:
+    agent: openAIAgent
+    params:
+      tools:
+        - type: function
+          function:
+            name: getWeather
+            description: get weather information of the specified location
+            parameters:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  description: The latitude of the location.
+                longitude:
+                  type: number
+                  description: The longitude of the location.
+              required:
+                - latitude
+                - longitude
+    inputs:
+      messages: :messagesWithUserInput
+  output:
+    agent: stringTemplateAgent
+    params:
+      template: "Weather: ${0}"
+    console:
+      after: true
+    inputs:
+      - :llmCall.choices.$0.message.content
+    if: :llmCall.choices.$0.message.content
+  messagesWithFirstRes:
+    agent: pushAgent
+    inputs:
+      array: :messagesWithUserInput
+      item: :llmCall.choices.$0.message
+  tool_calls:
+    agent: nestedAgent
+    inputs:
+      tool_calls: :llmCall.choices.$0.message.tool_calls
+      messagesWithFirstRes: :messagesWithFirstRes
+    if: :llmCall.choices.$0.message.tool_calls
+    graph:
+      nodes:
+        outputFetching:
+          agent: stringTemplateAgent
+          params:
+            template: "... fetching weather info: ${0}"
+          console:
+            after: true
+          inputs:
+            - :tool_calls.$0.function.arguments
+        parser:
+          agent: jsonParserAgent
+          inputs:
+            - :tool_calls.$0.function.arguments
+        urlPoints:
+          agent: stringTemplateAgent
+          params:
+            template: https://api.weather.gov/points/${0},${1}
+          inputs:
+            - :parser.latitude
+            - :parser.longitude
+        fetchPoints:
+          agent: fetchAgent
+          inputs:
+            url: :urlPoints
+            headers:
+              User-Agent: (receptron.org)
+        fetchForecast:
+          agent: fetchAgent
+          params:
+            type: text
+          inputs:
+            url: :fetchPoints.properties.forecast
+            headers:
+              User-Agent: (receptron.org)
+          unless: :fetchPoints.onError
+        extractError:
+          agent: stringTemplateAgent
+          params:
+            template: "${0}: ${1}"
+          inputs:
+            - :fetchPoints.onError.error.title
+            - :fetchPoints.onError.error.detail
+          if: :fetchPoints.onError
+        responseText:
+          agent: copyAgent
+          anyInput: true
+          inputs:
+            - :fetchForecast
+            - :extractError
+        toolMessage:
+          agent: propertyFilterAgent
+          params:
+            inject:
+              - propId: tool_call_id
+                from: 1
+              - propId: name
+                from: 2
+              - propId: content
+                from: 3
+          inputs:
+            - role: tool
+            - :tool_calls.$0.id
+            - :tool_calls.$0.function.name
+            - :responseText
+        messagesWithToolRes:
+          agent: pushAgent
+          inputs:
+            array: :messagesWithFirstRes
+            item: :toolMessage
+        llmCall:
+          agent: openAIAgent
+          inputs:
+            messages: :messagesWithToolRes
+        output:
+          agent: stringTemplateAgent
+          params:
+            template: "Weather: ${0}"
+          console:
+            after: true
+          inputs:
+            - :llmCall.choices.$0.message.content
+        messagesWithSecondRes:
+          agent: pushAgent
+          inputs:
+            array: :messagesWithToolRes
+            item: :llmCall.choices.$0.message
+          isResult: true
+  no_tool_calls:
+    agent: copyAgent
+    unless: :llmCall.choices.$0.message.tool_calls
+    inputs:
+      - :messagesWithFirstRes
+  reducer:
+    agent: copyAgent
+    anyInput: true
+    inputs:
+      - :no_tool_calls
+      - :tool_calls.messagesWithSecondRes
+```
+
+1. **Loop Execution**: The graph loops continuously until the condition specified by the `continue` node is false.
+2. **User Input Prompt**: The system prompts the user to input a location.
+3. **User Input Handling**: The input is checked to determine if the conversation should continue.
+4. **Message Construction**: User input is processed and added to the conversation messages.
+5. **LLM Call**: The system calls an AI model to generate a response based on the conversation messages.
+6. **Tool Invocation**: If the AI response includes a tool call (e.g., to fetch weather data), the nested graph handles the tool call and retrieves the necessary information.
+7. **Output Generation**: The final response, including the fetched weather information, is formatted and output to the console.
+
+## Dynamic Graph Generation
+
+It is even possible to let the LLM to dynamically generate a GraphAI yaml and run it, which is an equivalent to the code interpreter.
+
+Here is an example (I'm not able to paste the code here, because thd markdown parser will be confused with embedded json tags):
+
+[https://github.com/receptron/graphai_samples/blob/main/samples/openai/metachat.yaml](https://github.com/receptron/graphai_samples/blob/main/samples/openai/metachat.yaml)
+
+This sample application generates a new GraphAI graph based on a sample GraphAI graph ([reception.yaml](https://github.com/receptron/graphai/blob/main/packages/samples/data/reception.json), which retrieves the name, date of birth and gender from the user), and run it. The generated app retrieves the name, address and phone number instead.
+
+## In-memory RAG
+
+This sample application performs an in-memory RAG by dividing a Wikipedi article into chunks, get embedding vectors for those chunks and create an appropriate prompt based on the cosine similarities. 
+
+```YAML
+version: 0.3
+nodes:
+  source:
+    value:
+      name: Sam Bankman-Fried
+      topic: sentence by the court
+      query: describe the final sentence by the court for Sam Bankman-Fried
+  wikipedia:
+    console:
+      before: ...fetching data from wikipedia
+    agent: wikipediaAgent
+    inputs:
+      - :source.name
+    params:
+      lang: en
+  chunks:
+    console:
+      before: ...splitting the article into chunks
+    agent: stringSplitterAgent
+    inputs:
+      text: :wikipedia.content
+  embeddings:
+    console:
+      before: ...fetching embeddings for chunks
+    agent: stringEmbeddingsAgent
+    inputs:
+      - :chunks.contents
+  topicEmbedding:
+    console:
+      before: ...fetching embedding for the topic
+    agent: stringEmbeddingsAgent
+    inputs:
+      - :source.topic
+  similarityCheck:
+    agent: dotProductAgent
+    inputs:
+      matrix: :embeddings
+      vector: :topicEmbedding.$0
+  sortedChunks:
+    agent: sortByValuesAgent
+    inputs:
+      array: :chunks.contents
+      values: :similarityCheck
+  referenceText:
+    agent: tokenBoundStringsAgent
+    inputs:
+      chunks: :sortedChunks
+    params:
+      limit: 5000
+  prompt:
+    agent: stringTemplateAgent
+    inputs:
+      - :source.query
+      - :referenceText.content
+    params:
+      template: |-
+        Using the following document, ${0}
+
+        ${1}
+  RagQuery:
+    console:
+      before: ...performing the RAG query
+    agent: openAIAgent
+    inputs:
+      prompt: :prompt
+  OneShotQuery:
+    agent: openAIAgent
+    inputs:
+      prompt: :source.query
+  RagResult:
+    agent: copyAgent
+    inputs:
+      - :RagQuery.choices.$0.message.content
+    isResult: true
+  OneShotResult:
+    agent: copyAgent
+    inputs:
+      - :OneShotQuery.choices.$0.message.content
+    isResult: true
+```

@@ -93,7 +93,7 @@ yarn add graphai
 ## Data Flow Graph
 データフローグラフ（DFG）は、データの流れを定義するJavaScriptオブジェクトです。通常、YAMLファイルで記述され、実行時に読み込まれます。
 
-DFGは、データフロー内の個々のノードを表す一連のネストされたプロパティを含む [node(ノード)](#node)のコレクションで構成されています。各ノードは、一意のキー（nodeId（ノードID）例：`node1`, `node2`）で識別され、ノード自身の動作や他のノードとの関係を決定するいくつかの事前定義されたプロパティ（params, inputs, valueなど）を含むことができます。ノードには [computed nodes(計算ノード)](#computed-node) と [static nodes(静的ノード)](#static-node), の2種類があります。
+DFGは、データフロー内の個々のノードを表す一連のネストされたプロパティを含む [node(ノード)](#node)のコレクションで構成されています。各ノードは、一意のキー（nodeId（ノードID）例：`node1`, `node2`）で識別され、ノード自身の動作や他のノードとの関係を決定するいくつかの事前定義されたプロパティ（params, inputs, valueなど）を含むことができます。ノードには [computed nodes(計算ノード)](#computed-node) と [static nodes(静的ノード)](#static-node) の2種類があります。
 
 ### Data Source
 ノード同士のつながりは、「inputs」、「update」、「if」または「while」プロパティを使って、あるノードから別のノードに参照を渡すことで作られます。これらのプロパティの値はデータソースと呼ばれます。
@@ -121,9 +121,7 @@ DFGは、データフロー内の個々のノードを表す一連のネスト�
 ### Agent function
 エージェント関数とは、特定のエージェントを実装し、関連付けられた計算ノードのために計算を行うTypeScript関数のことです。エージェント関数はcontext（AgentFunctionContext型）を受け取り、以下のプロパティを持ちます：
 
-An *agent function* is a TypeScript function, which implements a particular *agent*, performing some computations for the associated *computed node*. An *agent function* receives a *context* (type AgentFunctionContext), which has following properties:
-
-- *params*: agent specific parameters specified in the DFG (specified by the "params" property of the node)
+- *params*: DFGで指定されたエージェント固有のパラメータ（ノードの"params"プロパティで指定）
 - *inputs*: a set of inputs came from other nodes (specified by "inputs" property of the node).
 - *debugInfo*: a set of information for debugging purposes.
 
