@@ -10,7 +10,7 @@ GraphAIは、プログラムがどのように動くかを図のように見せ�
 ## Declarative Data Flow Programming
 ### 宣言的データワークフロープログラミング
 
-以下は簡単な例です。データソースとしてWikipediaを使用し、In-MemoryのRAG（Retrieval-Augmented Generation、検索強化生成）を実行します。In-MemoryのRAGとは、データをメモリ上に保持しながら、検索と生成を組み合わせて高品質な結果を生成する手法です。
+以下は簡単な例です。データソースとしてWikipediaを使用し、In-MemoryのRAG（Retrieval-Augmented Generation、検索強化生成）を実行します。「In-MemoryのRAG」とは、データをメモリ上に保持しながら、検索と生成を組み合わせて高品質な結果を生成する手法です。
 
 ```YAML
 nodes:
