@@ -1,5 +1,5 @@
 # GraphAI
-GraphAI は非同期のデータフロー実行エンジンで、開発者が YAML や JSON で宣言的なデータフローグラフとしてエージェントワークフローを記述することにより、エージェントアプリケーションを構築できるようにします。
+GraphAIは、エージェントアプリケーションを簡単に構築できるようにするための、非同期データフロー実行エンジンです。YAMLやJSONを使って宣言的にデータフローグラフを記述し、エージェントアプリケーションを定義できます。
 
 - [GraphAI core](./packages/graphai/README.ja.md)
 - [GraphAI cli](./packages/cli/README.md)
