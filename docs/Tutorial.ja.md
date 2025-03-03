@@ -55,7 +55,7 @@ GraphAIには、*計算ノード*と*静的ノード*の2種類のノードが�
 
 （`agent`を持っているノードが計算ノードです）
 
-以下は、前節のYAMLと同じ操作を実行します。静的ノードである*prompt*ノードは、"Explain ML's transformer in 100 words" という値を保持しています。
+以下は、前節のYAMLと同じ操作を実行します。静的ノードである`prompt`ノードは、"Explain ML's transformer in 100 words" という値を保持しています。
 
 ```YAML
 version: 0.3
