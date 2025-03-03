@@ -25,7 +25,7 @@ nodes:
 
 この例には、２つのノードがあります：
 
-1. `llm`: このノードは `openAIAgent` に関連付けられていて、OpenAIの「Chat Completions API」を呼び出します。このエージェントは "Explain ML's transformer in 100 words." というプロンプトを受け取り「Chat Completions API」の結果を出力します。
+1. `llm`: このノードは `openAIAgent`というエージェントを使用し、OpenAIの「Chat Completions API」を呼び出します。このエージェントは "Explain ML's transformer in 100 words." というプロンプトを受け取り「Chat Completions API」から返ってきた結果を出力します。
 2. `output`: このノードは、`llm` から結果を受け取りコンソールに出力します。
 
 `llm`ノードは、はじめからすべての入力データが揃っているのですぐに実行されますが、`output`ノードは `llm`ノードの結果を受け取ってから実行されます。
