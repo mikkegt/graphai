@@ -45,17 +45,17 @@ OPENAI_API_KEY=sk-...
 graphai hello.yaml
 ```
 
-yamlのサンプルがあるので参考にしてください： [Graphai Samples](https://github.com/receptron/graphai_samples).
+yamlのサンプルがあるので参考にしてください： [Graphai Samples](https://github.com/receptron/graphai_samples)
 
 ## Computed Node and Static Node
+GraphAIには、*計算ノード*と*静的ノード*の2種類のノードがあります。
 
-There are two types of nodes in GraphAI, *computed nodes* and *static nodes*.
+- *計算ノード*：特定の計算を実行するエージェントに関連付けられています。前節の例にある両方のノードは*計算ノード*です。
+- *静的ノード*：プログラミングの変数のようなもので、値のプレースホルダーです。
 
-A computed node is associated with an *agent*, which performs a certain computation. Both nodes in the previous examples are *computed nodes*.
+（`agent`を持っているノードが計算ノードです）
 
-A *static nodes* is a place holder of a value, just like a *variable* in computer languages.
-
-The example below performs the same operation, but uses one *static node*, **prompt**, which holds the value "Explain ML's transformer in 100 words".
+以下は、前節のYAMLと同じ操作を実行します。静的ノードである*prompt*ノードは、"Explain ML's transformer in 100 words" という値を保持しています。
 
 ```YAML
 version: 0.3
@@ -77,10 +77,9 @@ nodes:
 ```
 
 ## Loop
+データフローグラフは設計上非循環である必要がありますが、loop、nest、if/unless、および map（reduceのマッピング）など、いくつかの制御フローを用意しています。
 
-The dataflow graph needs to be acyclic by design, but we added a few control flow mechanisms, such as loop, nesting, if/unless and mapping (of map-reduce). 
-
-Here is a simple application, which uses **loop**.
+以下は、`loop`を使ったシンプルなアプリケーションです。
 
 ```YAML
 version: 0.3
@@ -116,18 +115,17 @@ nodes:
       item: :llm.choices.$0.message.content
 ```
 
-1. **fruits**: This static node holds the list of fruits at the begining but updated with the array property of **shift** node after each iteration.
-2. **result**: This static node starts with an empty array, but updated with the value of **reducer** node after each iteration.
-3. **shift**: This node takes the first item from the value from **fruits** node, and output the remaining array and item as properties.
-4. **prompt**: This node creates a prompt by filling the `${0}` of the template string with the item property of the output of **shift** node.
-5. **llm**: This computed node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
-6. **reducer**: This node pushes the content from the output of **llm** node to the value of **result** node.
+1. `fruits`: このノードはプロパティにフルーツの配列を保持しています。この配列の内容は、処理が繰り返されるごとに`shift`ノードで更新されます。
+2. `result`: このノードは空の配列を保持していますが、処理が繰り返されるごとに`reducer`ノードの値で更新されます。
+3. `shift`: このノードは`shiftAgent`を使用しています。`fruits`ノードの配列から最初の項目を取り出し、残りの配列を保持します。
+4. `prompt`: このノードは`stringTemplateAgent`を使用しています。、`shift`ノードから受け取った`item`プロパティをテンプレート文字列 `${0}` に埋め込んでプロンプトを作成します。
+5. `llm`: このノードは`openAIAgent`を使用しています。OpenAIのAPIを呼び出し、`prompt`ノードで作成したプロンプトを入力とし、返ってきた結果を出力しています。モデルには`gpt-4o`を指定しています。
+6. `reducer`: このノードは`pushAgent`を使用しています。`llm`ノードの出力を`result`ノードの配列に追加します。
 
-Please notice that each item in the array will be processed sequentially. To process them concurrently, see the section below. 
+各配列の項目は順次処理されます。並行処理をおこなう方法は次の節で解説しています。
 
 ## Mapping
-
-Here is a simple application, which uses **map**.
+以下は、`map`を使ったシンプルなアプリケーションです。
 
 ```YAML
 version: 0.3
@@ -158,13 +156,13 @@ nodes:
           isResult: true
 ```
 
-1. **fruits**: This static node holds the list of fruits.
-2. **map**: This node is associated with **mapAgent**, which performs the mapping, by executing the nested graph for each item for the value of **fruits** node, and outputs the combined results.
-3. **prompt**: This node creates a prompt by filling the `${0}` of the template string with each item of the value of **fruits** node.
-4. **llm**: This node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
-5. **result**: This node retrieves the content property from the output of **llm** node.
+1. `fruits`: このノードはプロパティにフルーツの配列を保持しています。
+2. `map`: このノードは `mapAgent`を使用しています。`fruits`ノードの配列の各項目に対し並行で処理をおこない、それぞれの結果を結合して出力します。並行処理は、`graph`プロパティで定義されたサブグラフ（ネストで定義された各ノード `prompt`, `llm`, `result`）を使用しておこなわれます。
+3. `prompt`: このノードは`stringTemplateAgent`を使用しています。親ノードである`map`ノードから受け取った`row`プロパティをテンプレート文字列 `${0}` に埋め込んでプロンプトを作成します。
+4. `llm`: このノードは`openAIAgent`を使用しています。OpenAIのAPIを呼び出し、`prompt`ノードで作成したプロンプトを入力とし、返ってきた結果を出力しています。モデルには`gpt-4o`を指定しています。
+5. `result`: このノードは`llm`ノードの出力から`content`プロパティを取得します。
 
-Please notice that each item in the array will be processed concurrently.
+各配列の項目は並行して処理されます。`map`ノードは配列の各要素に対して独立したインスタンスのサブグラフを作成し、それぞれのインスタンスが同時に実行されます。
 
 ## ChatBot
 
