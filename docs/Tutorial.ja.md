@@ -7,7 +7,7 @@ GraphAI (https://github.com/receptron/graphai) は、 非プログラマがデ�
 以下は、GraphAIの "Hello World" です。
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   llm:
     agent: openAIAgent
@@ -17,10 +17,12 @@ nodes:
       prompt: Explain ML's transformer in 100 words.
   output:
     agent: copyAgent
+    params:
+      namedKey: text
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
+      text: :llm.text
 ```
 
 この例には、２つのノードがあります：
@@ -58,7 +60,7 @@ GraphAIには、*計算ノード*と*静的ノード*の2種類のノードが�
 以下は、前節のyamlファイルの処理と同じ操作を実行します。静的ノードである`prompt`ノードは、"Explain ML's transformer in 100 words" という値を保持しています。
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   prompt:
     value: Explain ML's transformer in 100 words.
@@ -70,10 +72,12 @@ nodes:
       prompt: :prompt
   output:
     agent: copyAgent
+    params:
+      namedKey: text
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
+      text: :llm.text
 ```
 
 ## Loop
@@ -82,45 +86,42 @@ nodes:
 以下は、`loop`を使ったシンプルなアプリケーションです。
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :fruits
 nodes:
   fruits:
-    value: [apple, lemon, banana]
+    value:
+      - apple
+      - lemomn
+      - banana
     update: :shift.array
   result:
     value: []
-    update: :reducer
+    update: :reducer.array
     isResult: true
   shift:
     agent: shiftAgent
-    inputs: 
-      array: [:fruits]
-  prompt:
-    agent: stringTemplateAgent
-    params:
-      template: What is the typical color of ${0}? Just answer the color.
-    inputs: [:shift.item]
+    inputs:
+      array: :fruits
   llm:
     agent: openAIAgent
     params:
       model: gpt-4o
-    inputs: 
-      prompt: [:prompt]
+    inputs:
+      prompt: What is the typical color of ${:shift.item}? Just answer the color.
   reducer:
     agent: pushAgent
     inputs:
       array: :result
-      item: :llm.choices.$0.message.content
+      item: :llm.text
 ```
 
-1. `fruits`: このノードはプロパティにフルーツの配列を保持しています。この配列の内容は、処理が繰り返されるごとに`shift`ノードで更新されます。
-2. `result`: このノードは空の配列を保持していますが、処理が繰り返されるごとに`reducer`ノードの値で更新されます。
-3. `shift`: このノードは`shiftAgent`を使用しています。`fruits`ノードの配列から最初の項目を取り出し、残りの配列を保持します。
-4. `prompt`: このノードは`stringTemplateAgent`を使用しています。、`shift`ノードから受け取った`item`プロパティをテンプレート文字列 `${0}` に埋め込んでプロンプトを作成します。
-5. `llm`: このノードは`openAIAgent`を使用しています。OpenAIのAPIを呼び出し、`prompt`ノードで作成したプロンプトを入力とし、返ってきた結果を出力しています。モデルには`gpt-4o`を指定しています。
-6. `reducer`: このノードは`pushAgent`を使用しています。`llm`ノードの出力を`result`ノードの配列に追加します。
+1. `fruits`: このノードはプロパティにフルーツのリストを保持しています。これらは、処理が繰り返されるごとに`shift`ノードの配列プロパティで更新されます。
+2. `result`: このノードは、はじめに空の配列を保持していますが、処理が繰り返されるごとに`reducer`ノードの値で更新されます。
+3. `shift`: このノードは`shiftAgent`を使って`fruits`ノードのリストから最初のアイテムを取り出し、残りのアイテムと配列を出力しています。
+4. `llm`: このノードでは、`shift`ノードから受け取った`item`プロパティの値を使ってプロンプトを生成し、`openAIAgent`エージェントを使ってOpenAIのAPIに渡し結果を取得しています。モデルには`gpt-4o`を指定しています。
+5. `reducer`: このノードは`pushAgent`を使って`llm`ノードの出力を`result`ノードの配列に追加しています。
 
 各配列の項目は順次処理されます。並行処理をおこなう方法は次の節で解説しています。
 
@@ -128,10 +129,13 @@ nodes:
 以下は、`map`を使ったシンプルなアプリケーションです。
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   fruits:
-    value: [apple, lemon, banana]
+    value:
+      - apple
+      - lemomn
+      - banana
   map:
     agent: mapAgent
     inputs:
@@ -139,20 +143,18 @@ nodes:
     isResult: true
     graph:
       nodes:
-        prompt:
-          agent: stringTemplateAgent
-          params:
-            template: What is the typical color of ${0}? Just answer the color.
-          inputs: [:row]
         llm:
           agent: openAIAgent
           params:
             model: gpt-4o
-          inputs: 
-            prompt: [:prompt]
+          inputs:
+            prompt: What is the typical color of ${:row}? Just answer the color.
         result:
           agent: copyAgent
-          inputs: [:llm.choices.$0.message.content]
+          params:
+            namedKey: item
+          inputs:
+            item: :llm.text
           isResult: true
 ```
 
@@ -165,64 +167,45 @@ nodes:
 各配列の項目は並行して処理されます。`map`ノードは配列の各要素に対して独立したインスタンスのサブグラフを作成し、それぞれのインスタンスが同時に実行されます。
 
 ## ChatBot
-
-Here is a chatbot application using the loop, which allows the user to talk to the LLM until she/he types "/bye".
+以下は、ループを使用したチャットボットアプリケーションです。ユーザーが「/bye」と入力するまで、LLM（大規模言語モデル）と対話を続けることができます。
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :continue
 nodes:
   continue:
     value: true
-    update: :checkInput.continue
+    update: :checkInput
   messages:
     value: []
-    update: :reducer
+    update: :llm.messages
+    isResult: true
   userInput:
     agent: textInputAgent
     params:
       message: "You:"
+      required: true
   checkInput:
-    agent: propertyFilterAgent
-    params:
-      inspect:
-        - propId: continue
-          notEqual: /bye
+    agent: compareAgent
     inputs:
-      - {}
-      - :userInput
-  userMessage:
-    agent: propertyFilterAgent
-    params:
-      inject:
-        - propId: content
-          from: 1
-    inputs:
-      - role: user
-      - :userInput
-  appendedMessages:
-    agent: pushAgent
-    inputs:
-      array: :messages
-      item: :userMessage
+      array:
+        - :userInput.text
+        - "!="
+        - /bye
   llm:
     agent: openAIAgent
+    params:
+      model: gpt-4o
     inputs:
-      messages: :appendedMessages
+      messages: :messages
+      prompt: :userInput.text
   output:
     agent: stringTemplateAgent
-    params:
-      template: "\e[32mLLM\e[0m: ${0}"
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
-  reducer:
-    agent: pushAgent
-    inputs:
-      array: :appendedMessages
-      item: :llm.choices.$0.message
+      text: "\e[32mAgent\e[0m: ${:llm.text}"
 ```
 
 1. The user is prompted to input a message with "You:".
@@ -240,48 +223,31 @@ nodes:
 Here is an example, which uses the function call capability and nested graph.
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :continue
 nodes:
   continue:
     value: true
-    update: :checkInput.continue
+    update: :checkInput
   messages:
     value:
       - role: system
         content: You are a meteorologist. Use getWeather API, only when the user ask for
           the weather information.
-    update: :reducer
+    update: :reducer.array.$0
     isResult: true
   userInput:
     agent: textInputAgent
     params:
       message: "Location:"
   checkInput:
-    agent: propertyFilterAgent
-    params:
-      inspect:
-        - propId: continue
-          notEqual: /bye
+    agent: compareAgent
     inputs:
-      - {}
-      - :userInput
-  userMessage:
-    agent: propertyFilterAgent
-    params:
-      inject:
-        - propId: content
-          from: 1
-    inputs:
-      - role: user
-      - :userInput
-  messagesWithUserInput:
-    agent: pushAgent
-    inputs:
-      array: :messages
-      item: :userMessage
-    if: :checkInput.continue
+      array:
+        - :userInput.text
+        - "!="
+        - /bye
   llmCall:
     agent: openAIAgent
     params:
@@ -302,53 +268,44 @@ nodes:
               required:
                 - latitude
                 - longitude
+      model: gpt-4o
     inputs:
-      messages: :messagesWithUserInput
+      messages: :messages
+      prompt: :userInput.text
+    if: :checkInput
   output:
     agent: stringTemplateAgent
-    params:
-      template: "Weather: ${0}"
+    inputs:
+      text: "Weather: ${:llmCall.text}"
     console:
       after: true
-    inputs:
-      - :llmCall.choices.$0.message.content
-    if: :llmCall.choices.$0.message.content
+    if: :llmCall.text
   messagesWithFirstRes:
     agent: pushAgent
     inputs:
-      array: :messagesWithUserInput
-      item: :llmCall.choices.$0.message
+      array: :messages
+      items:
+        - :userInput.message
+        - :llmCall.message
   tool_calls:
     agent: nestedAgent
     inputs:
-      tool_calls: :llmCall.choices.$0.message.tool_calls
-      messagesWithFirstRes: :messagesWithFirstRes
-    if: :llmCall.choices.$0.message.tool_calls
+      parent_messages: :messagesWithFirstRes.array
+      parent_tool: :llmCall.tool
+    if: :llmCall.tool
     graph:
       nodes:
         outputFetching:
           agent: stringTemplateAgent
-          params:
-            template: "... fetching weather info: ${0}"
+          inputs:
+            text: "... fetching weather info: ${:parent_tool.arguments.latitude},
+              ${:parent_tool.arguments.longitude}"
           console:
             after: true
-          inputs:
-            - :tool_calls.$0.function.arguments
-        parser:
-          agent: jsonParserAgent
-          inputs:
-            - :tool_calls.$0.function.arguments
-        urlPoints:
-          agent: stringTemplateAgent
-          params:
-            template: https://api.weather.gov/points/${0},${1}
-          inputs:
-            - :parser.latitude
-            - :parser.longitude
         fetchPoints:
           agent: fetchAgent
           inputs:
-            url: :urlPoints
+            url: https://api.weather.gov/points/${:parent_tool.arguments.latitude},${:parent_tool.arguments.longitude}
             headers:
               User-Agent: (receptron.org)
         fetchForecast:
@@ -362,67 +319,56 @@ nodes:
           unless: :fetchPoints.onError
         extractError:
           agent: stringTemplateAgent
-          params:
-            template: "${0}: ${1}"
           inputs:
-            - :fetchPoints.onError.error.title
-            - :fetchPoints.onError.error.detail
+            text: "${:fetchPoints.onError.error.title}:
+              ${:fetchPoints.onError.error.detail}"
           if: :fetchPoints.onError
         responseText:
           agent: copyAgent
           anyInput: true
           inputs:
-            - :fetchForecast
-            - :extractError
-        toolMessage:
-          agent: propertyFilterAgent
-          params:
-            inject:
-              - propId: tool_call_id
-                from: 1
-              - propId: name
-                from: 2
-              - propId: content
-                from: 3
-          inputs:
-            - role: tool
-            - :tool_calls.$0.id
-            - :tool_calls.$0.function.name
-            - :responseText
+            array:
+              - :fetchForecast
+              - :extractError
         messagesWithToolRes:
           agent: pushAgent
           inputs:
-            array: :messagesWithFirstRes
-            item: :toolMessage
+            array: :parent_messages
+            item:
+              role: tool
+              tool_call_id: :parent_tool.id
+              name: :parent_tool.name
+              content: :responseText.array.$0
         llmCall:
           agent: openAIAgent
           inputs:
-            messages: :messagesWithToolRes
+            messages: :messagesWithToolRes.array
+          params:
+            model: gpt-4o
         output:
           agent: stringTemplateAgent
-          params:
-            template: "Weather: ${0}"
+          inputs:
+            text: "Weather: ${:llmCall.text}"
           console:
             after: true
-          inputs:
-            - :llmCall.choices.$0.message.content
         messagesWithSecondRes:
           agent: pushAgent
           inputs:
-            array: :messagesWithToolRes
-            item: :llmCall.choices.$0.message
+            array: :messagesWithToolRes.array
+            item: :llmCall.message
           isResult: true
   no_tool_calls:
     agent: copyAgent
-    unless: :llmCall.choices.$0.message.tool_calls
+    unless: :llmCall.tool
     inputs:
-      - :messagesWithFirstRes
+      result: :messagesWithFirstRes.array
   reducer:
     agent: copyAgent
     anyInput: true
     inputs:
-      - :no_tool_calls
-      - :tool_calls.messagesWithSecondRes
+      array:
+        - :no_tool_calls.result
+        - :tool_calls.messagesWithSecondRes.array
 ```
 
 1. **Loop Execution**: The graph loops continuously until the condition specified by the `continue` node is false.
@@ -448,19 +394,19 @@ This sample application generates a new GraphAI graph based on a sample GraphAI 
 This sample application performs an in-memory RAG by dividing a Wikipedi article into chunks, get embedding vectors for those chunks and create an appropriate prompt based on the cosine similarities. 
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   source:
     value:
       name: Sam Bankman-Fried
       topic: sentence by the court
-      query: describe the final sentence by the court for Sam Bankman-Fried
+      query: describe the final sentence by the court for Sam Bank-Fried
   wikipedia:
     console:
-      before: ...fetching data from wikipedia
+      before: ...fetching data from wikkpedia
     agent: wikipediaAgent
     inputs:
-      - :source.name
+      query: :source.name
     params:
       lang: en
   chunks:
@@ -469,28 +415,28 @@ nodes:
     agent: stringSplitterAgent
     inputs:
       text: :wikipedia.content
-  embeddings:
+  chunkEmbeddings:
     console:
       before: ...fetching embeddings for chunks
     agent: stringEmbeddingsAgent
     inputs:
-      - :chunks.contents
+      array: :chunks.contents
   topicEmbedding:
     console:
       before: ...fetching embedding for the topic
     agent: stringEmbeddingsAgent
     inputs:
-      - :source.topic
-  similarityCheck:
+      item: :source.topic
+  similarities:
     agent: dotProductAgent
     inputs:
-      matrix: :embeddings
+      matrix: :chunkEmbeddings
       vector: :topicEmbedding.$0
   sortedChunks:
     agent: sortByValuesAgent
     inputs:
       array: :chunks.contents
-      values: :similarityCheck
+      values: :similarities
   referenceText:
     agent: tokenBoundStringsAgent
     inputs:
@@ -500,31 +446,35 @@ nodes:
   prompt:
     agent: stringTemplateAgent
     inputs:
-      - :source.query
-      - :referenceText.content
+      prompt: :source.query
+      text: :referenceText.content
     params:
       template: |-
-        Using the following document, ${0}
+        Using the following document, ${text}
 
-        ${1}
+        ${prompt}
   RagQuery:
     console:
       before: ...performing the RAG query
     agent: openAIAgent
     inputs:
       prompt: :prompt
+    params:
+      model: gpt-4o
   OneShotQuery:
     agent: openAIAgent
     inputs:
       prompt: :source.query
+    params:
+      model: gpt-4o
   RagResult:
     agent: copyAgent
     inputs:
-      - :RagQuery.choices.$0.message.content
+      result: :RagQuery.text
     isResult: true
   OneShotResult:
     agent: copyAgent
     inputs:
-      - :OneShotQuery.choices.$0.message.content
+      result: :OneShotQuery.text
     isResult: true
 ```
