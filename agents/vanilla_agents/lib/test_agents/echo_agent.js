@@ -15,14 +15,14 @@ const echoAgentInfo = {
     mock: exports.echoAgent,
     samples: [
         {
-            inputs: [],
-            params: { message: "this is test" },
-            result: { message: "this is test" },
+            inputs: {},
+            params: { text: "this is test" },
+            result: { text: "this is test" },
         },
         {
-            inputs: [],
+            inputs: {},
             params: {
-                message: "If you add filterParams option, it will respond to filterParams",
+                text: "If you add filterParams option, it will respond to filterParams",
                 filterParams: true,
             },
             result: {},
@@ -30,6 +30,7 @@ const echoAgentInfo = {
     ],
     description: "Echo agent",
     category: ["test"],
+    cacheType: "pureAgent",
     author: "Satoshi Nakajima",
     repository: "https://github.com/receptron/graphai",
     license: "MIT",

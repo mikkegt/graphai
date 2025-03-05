@@ -1,7 +1,9 @@
 import { AgentFunction, AgentFunctionInfo, assert } from "graphai";
-import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, ModelParams } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, ModelParams, EnhancedGenerateContentResponse } from "@google/generative-ai";
 
-import { GrapAILLMInputBase, getMergeValue } from "@graphai/llm_utils";
+import { GraphAILLMInputBase, getMergeValue, GraphAILlmMessage, getMessages } from "@graphai/llm_utils";
+
+import type { GraphAITool, GraphAIToolCalls, GraphAIMessage } from "@graphai/agent_utils";
 
 type GeminiInputs = {
   model?: string;
@@ -9,17 +11,56 @@ type GeminiInputs = {
   max_tokens?: number;
   tools?: Array<Record<string, any>>;
   // tool_choice?: any;
-  messages?: Array<Record<string, any>>;
-} & GrapAILLMInputBase;
+  response_format?: any;
+  messages?: Array<GraphAILlmMessage>;
+} & GraphAILLMInputBase;
 
-export const geminiAgent: AgentFunction<GeminiInputs, Record<string, any> | string, string | Array<any>, GeminiInputs> = async ({ params, namedInputs }) => {
-  const { model, system, temperature, max_tokens, tools, prompt, messages } = { ...params, ...namedInputs };
+type GeminiConfig = {
+  apiKey?: string;
+  stream?: boolean;
+};
+
+type GeminiParams = GeminiInputs & GeminiConfig;
+
+type GeminiResult = Partial<GraphAITool & GraphAIToolCalls & GraphAIMessage & { messages: GraphAILlmMessage[] }> | [];
+
+const convertOpenAIChatCompletion = (response: EnhancedGenerateContentResponse, messages: GraphAILlmMessage[]) => {
+  const text = response.text();
+  const message: any = { role: "assistant", content: text };
+  // [":llm.choices.$0.message.tool_calls.$0.function.arguments"],
+  const calls = response.functionCalls();
+  if (calls) {
+    message.tool_calls = calls.map((call) => {
+      return { function: { name: call.name, arguments: JSON.stringify(call.args) } };
+    });
+  }
+  const tool_calls = calls
+    ? calls.map((call) => {
+        return {
+          id: "dummy",
+          name: call.name,
+          arguments: call.args,
+        };
+      })
+    : [];
+  const tool = tool_calls && tool_calls[0] ? tool_calls[0] : undefined;
+  messages.push(message);
+
+  return { ...response, choices: [{ message }], text, tool, tool_calls, message, messages };
+};
+
+export const geminiAgent: AgentFunction<GeminiParams, GeminiResult, GeminiInputs, GeminiConfig> = async ({ params, namedInputs, config, filterParams }) => {
+  const { system, temperature, tools, max_tokens, prompt, messages /* response_format */ } = { ...params, ...namedInputs };
+
+  const { apiKey, stream, model } = {
+    ...params,
+    ...(config || {}),
+  };
 
   const userPrompt = getMergeValue(namedInputs, params, "mergeablePrompts", prompt);
   const systemPrompt = getMergeValue(namedInputs, params, "mergeableSystem", system);
 
-  // Notice that we ignore params.system if previous_message exists.
-  const messagesCopy: Array<any> = messages ? messages.map((m) => m) : systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
+  const messagesCopy = getMessages<GraphAILlmMessage>(systemPrompt, messages);
 
   if (userPrompt) {
     messagesCopy.push({
@@ -30,7 +71,11 @@ export const geminiAgent: AgentFunction<GeminiInputs, Record<string, any> | stri
 
   const lastMessage = messagesCopy.pop();
 
-  const key = process.env["GOOGLE_GENAI_API_KEY"];
+  if (!lastMessage) {
+    return [];
+  }
+
+  const key = apiKey ?? (typeof process !== "undefined" && typeof process.env !== "undefined" ? process.env["GOOGLE_GENAI_API_KEY"] : null);
   assert(!!key, "GOOGLE_GENAI_API_KEY is missing in the environment.");
   const genAI = new GoogleGenerativeAI(key);
   const safetySettings = [
@@ -39,10 +84,20 @@ export const geminiAgent: AgentFunction<GeminiInputs, Record<string, any> | stri
       threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
     },
   ];
+
   const modelParams: ModelParams = {
-    model: model ?? "gemini-pro",
+    model: model ?? "gemini-1.5-flash",
     safetySettings,
   };
+  /*
+  if (response_format) {
+    modelParams.generationConfig = {
+      responseMimeType: "application/json",
+      responseSchema: response_format,
+    };
+  }
+  */
+
   if (tools) {
     const functions = tools.map((tool: any) => {
       return tool.function;
@@ -67,19 +122,24 @@ export const geminiAgent: AgentFunction<GeminiInputs, Record<string, any> | stri
     }),
     generationConfig,
   });
+  messagesCopy.push(lastMessage);
+
+  if (stream) {
+    const result = await chat.sendMessageStream(lastMessage.content);
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      if (filterParams && filterParams.streamTokenCallback && chunkText) {
+        filterParams.streamTokenCallback(chunkText);
+      }
+    }
+    const response = await result.response;
+    return convertOpenAIChatCompletion(response, messagesCopy);
+  }
 
   const result = await chat.sendMessage(lastMessage.content);
   const response = result.response;
-  const text = response.text();
-  const message: any = { role: "assistant", content: text };
-  // [":llm.choices.$0.message.tool_calls.$0.function.arguments"],
-  const calls = result.response.functionCalls();
-  if (calls) {
-    message.tool_calls = calls.map((call) => {
-      return { function: { name: call.name, arguments: JSON.stringify(call.args) } };
-    });
-  }
-  return { choices: [{ message }] };
+
+  return convertOpenAIChatCompletion(response, messagesCopy);
 };
 
 const geminiAgentInfo: AgentFunctionInfo = {
@@ -113,8 +173,9 @@ const geminiAgentInfo: AgentFunctionInfo = {
   author: "Receptron team",
   repository: "https://github.com/receptron/graphai",
   license: "MIT",
-  // stream: true,
+  stream: true,
   npms: ["@anthropic-ai/sdk"],
+  environmentVariables: ["GOOGLE_GENAI_API_KEY"],
 };
 
 export default geminiAgentInfo;

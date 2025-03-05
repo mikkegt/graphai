@@ -11,7 +11,16 @@ Returns the sum of input values
 ```json
 
 {
-  "type": "array"
+  "type": "object",
+  "properties": {
+    "array": {
+      "type": "array",
+      "description": "the array"
+    }
+  },
+  "required": [
+    "array"
+  ]
 }
 
 ````
@@ -21,13 +30,81 @@ Returns the sum of input values
 ```json
 
 {
-  "type": "any"
+  "type": "object"
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a",
+  ":agentId.data.b",
+  ":agentId.data.c",
+  ":agentId.data.d"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a",
+  ":agentId.data.b"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a",
+  ":agentId.data.b"
+]
+
+````
 ```json
 
 [
@@ -98,17 +175,19 @@ Returns the sum of input values
 
 ```json
 
-[
-  {
-    "a": 1
-  },
-  {
-    "a": 2
-  },
-  {
-    "a": 3
-  }
-]
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    },
+    {
+      "a": 3
+    }
+  ]
+}
 
 ````
 
@@ -125,7 +204,9 @@ Returns the sum of input values
 ```json
 
 {
-  "a": 6
+  "data": {
+    "a": 6
+  }
 }
 
 ````
@@ -135,32 +216,34 @@ Returns the sum of input values
 
 ```json
 
-[
-  [
-    {
-      "a": 1,
-      "b": -1
-    },
-    {
-      "c": 10
-    }
-  ],
-  [
-    {
-      "a": 2,
-      "b": -1
-    }
-  ],
-  [
-    {
-      "a": 3,
-      "b": -2
-    },
-    {
-      "d": -10
-    }
+{
+  "array": [
+    [
+      {
+        "a": 1,
+        "b": -1
+      },
+      {
+        "c": 10
+      }
+    ],
+    [
+      {
+        "a": 2,
+        "b": -1
+      }
+    ],
+    [
+      {
+        "a": 3,
+        "b": -2
+      },
+      {
+        "d": -10
+      }
+    ]
   ]
-]
+}
 
 ````
 
@@ -169,6 +252,307 @@ Returns the sum of input values
 ```json
 
 {}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 6,
+    "b": -4,
+    "c": 10,
+    "d": -10
+  }
+}
+
+````
+### Sample2
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 1
+  }
+}
+
+````
+### Sample3
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 3
+  }
+}
+
+````
+### Sample4
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    },
+    {
+      "a": 3
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 6
+  }
+}
+
+````
+### Sample5
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1,
+      "b": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 6,
+    "b": 3
+  }
+}
+
+````
+### Sample6
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 6,
+    "b": 2
+  }
+}
+
+````
+### Sample7
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    },
+    {
+      "a": 3
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{"flatResponse":true}
+
+````
+
+#### result
+
+```json
+
+{
+  "a": 6
+}
+
+````
+### Sample8
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    [
+      {
+        "a": 1,
+        "b": -1
+      },
+      {
+        "c": 10
+      }
+    ],
+    [
+      {
+        "a": 2,
+        "b": -1
+      }
+    ],
+    [
+      {
+        "a": 3,
+        "b": -2
+      },
+      {
+        "d": -10
+      }
+    ]
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{"flatResponse":true}
 
 ````
 
@@ -184,17 +568,19 @@ Returns the sum of input values
 }
 
 ````
-### Sample2
+### Sample9
 
 #### inputs
 
 ```json
 
-[
-  {
-    "a": 1
-  }
-]
+{
+  "array": [
+    {
+      "a": 1
+    }
+  ]
+}
 
 ````
 
@@ -202,7 +588,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -215,20 +601,22 @@ Returns the sum of input values
 }
 
 ````
-### Sample3
+### Sample10
 
 #### inputs
 
 ```json
 
-[
-  {
-    "a": 1
-  },
-  {
-    "a": 2
-  }
-]
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    }
+  ]
+}
 
 ````
 
@@ -236,7 +624,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -249,23 +637,25 @@ Returns the sum of input values
 }
 
 ````
-### Sample4
+### Sample11
 
 #### inputs
 
 ```json
 
-[
-  {
-    "a": 1
-  },
-  {
-    "a": 2
-  },
-  {
-    "a": 3
-  }
-]
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2
+    },
+    {
+      "a": 3
+    }
+  ]
+}
 
 ````
 
@@ -273,7 +663,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -286,26 +676,28 @@ Returns the sum of input values
 }
 
 ````
-### Sample5
+### Sample12
 
 #### inputs
 
 ```json
 
-[
-  {
-    "a": 1,
-    "b": 1
-  },
-  {
-    "a": 2,
-    "b": 2
-  },
-  {
-    "a": 3,
-    "b": 0
-  }
-]
+{
+  "array": [
+    {
+      "a": 1,
+      "b": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0
+    }
+  ]
+}
 
 ````
 
@@ -313,7 +705,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -327,25 +719,27 @@ Returns the sum of input values
 }
 
 ````
-### Sample6
+### Sample13
 
 #### inputs
 
 ```json
 
-[
-  {
-    "a": 1
-  },
-  {
-    "a": 2,
-    "b": 2
-  },
-  {
-    "a": 3,
-    "b": 0
-  }
-]
+{
+  "array": [
+    {
+      "a": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0
+    }
+  ]
+}
 
 ````
 
@@ -353,7 +747,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 

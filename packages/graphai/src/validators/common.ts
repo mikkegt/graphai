@@ -1,22 +1,25 @@
-export const graphDataAttributeKeys = ["nodes", "concurrency", "agentId", "loop", "verbose", "version"];
+export const graphDataAttributeKeys = ["nodes", "concurrency", "agentId", "loop", "verbose", "version", "metadata"];
 
 export const computedNodeAttributeKeys = [
   "inputs",
+  "output",
   "anyInput",
   "params",
   "retry",
   "timeout",
   "agent",
   "graph",
+  "graphLoader",
   "isResult",
   "priority",
   "if",
   "unless",
+  "defaultValue",
   "filterParams",
   "console",
   "passThrough",
 ];
-export const staticNodeAttributeKeys = ["value", "update", "isResult"];
+export const staticNodeAttributeKeys = ["value", "update", "isResult", "console"];
 
 export class ValidationError extends Error {
   constructor(message: string) {

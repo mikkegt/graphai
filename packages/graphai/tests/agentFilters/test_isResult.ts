@@ -24,9 +24,10 @@ test("test agent filter", async () => {
         },
         isResult: true,
       },
-      bypassAgent: {
-        agent: "bypassAgent",
-        inputs: [":echo"],
+      copyAgent: {
+        agent: "copyAgent",
+        params: { namedKey: "text" },
+        inputs: { text: [":echo"] },
       },
     },
   };
@@ -53,9 +54,10 @@ test("test agent filter", async () => {
           filterParams: true,
         },
       },
-      bypassAgent: {
-        agent: "bypassAgent",
-        inputs: [":echo"],
+      copyAgent: {
+        agent: "copyAgent",
+        params: { namedKey: "text" },
+        inputs: { text: [":echo"] },
         isResult: true,
       },
     },
@@ -69,5 +71,5 @@ test("test agent filter", async () => {
 
   const graph = new GraphAI({ ...graph_data }, { ...agents }, { agentFilters });
   const result = await graph.run();
-  assert.deepStrictEqual(result, { bypassAgent: [{ isResult: false }] });
+  assert.deepStrictEqual(result, { copyAgent: [{ isResult: false }] });
 });

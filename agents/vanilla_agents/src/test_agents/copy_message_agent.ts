@@ -15,13 +15,14 @@ const copyMessageAgentInfo: AgentFunctionInfo = {
   mock: copyMessageAgent,
   samples: [
     {
-      inputs: [],
+      inputs: {},
       params: { count: 4, message: "hello" },
       result: { messages: ["hello", "hello", "hello", "hello"] },
     },
   ],
   description: "CopyMessage agent",
   category: ["test"],
+  cacheType: "pureAgent",
   author: "Receptron team",
   repository: "https://github.com/receptron/graphai",
   license: "MIT",

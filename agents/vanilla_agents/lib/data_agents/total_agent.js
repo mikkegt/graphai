@@ -1,8 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.totalAgent = void 0;
-const totalAgent = async ({ inputs }) => {
-    return inputs.reduce((result, input) => {
+const graphai_1 = require("graphai");
+const agent_utils_1 = require("@graphai/agent_utils");
+const totalAgent = async ({ namedInputs, params }) => {
+    const { flatResponse } = params;
+    (0, graphai_1.assert)((0, agent_utils_1.isNamedInputs)(namedInputs), "totalAgent: namedInputs is UNDEFINED! Set inputs: { array: :arrayNodeId }");
+    (0, graphai_1.assert)(!!namedInputs?.array, "totalAgent: namedInputs.array is UNDEFINED! Set inputs: { array: :arrayNodeId }");
+    const response = namedInputs.array.reduce((result, input) => {
         const inputArray = Array.isArray(input) ? input : [input];
         inputArray.forEach((innerInput) => {
             Object.keys(innerInput).forEach((key) => {
@@ -17,6 +22,10 @@ const totalAgent = async ({ inputs }) => {
         });
         return result;
     }, {});
+    if (flatResponse) {
+        return response;
+    }
+    return { data: response };
 };
 exports.totalAgent = totalAgent;
 //
@@ -25,49 +34,99 @@ const totalAgentInfo = {
     agent: exports.totalAgent,
     mock: exports.totalAgent,
     inputs: {
-        type: "array",
+        type: "object",
+        properties: {
+            array: {
+                type: "array",
+                description: "the array",
+            },
+        },
+        required: ["array"],
     },
     output: {
-        type: "any",
+        type: "object",
     },
     samples: [
         {
-            inputs: [{ a: 1 }, { a: 2 }, { a: 3 }],
+            inputs: { array: [{ a: 1 }, { a: 2 }, { a: 3 }] },
             params: {},
+            result: { data: { a: 6 } },
+        },
+        {
+            inputs: { array: [[{ a: 1, b: -1 }, { c: 10 }], [{ a: 2, b: -1 }], [{ a: 3, b: -2 }, { d: -10 }]] },
+            params: {},
+            result: { data: { a: 6, b: -4, c: 10, d: -10 } },
+        },
+        {
+            inputs: { array: [{ a: 1 }] },
+            params: {},
+            result: { data: { a: 1 } },
+        },
+        {
+            inputs: { array: [{ a: 1 }, { a: 2 }] },
+            params: {},
+            result: { data: { a: 3 } },
+        },
+        {
+            inputs: { array: [{ a: 1 }, { a: 2 }, { a: 3 }] },
+            params: {},
+            result: { data: { a: 6 } },
+        },
+        {
+            inputs: {
+                array: [
+                    { a: 1, b: 1 },
+                    { a: 2, b: 2 },
+                    { a: 3, b: 0 },
+                ],
+            },
+            params: {},
+            result: { data: { a: 6, b: 3 } },
+        },
+        {
+            inputs: { array: [{ a: 1 }, { a: 2, b: 2 }, { a: 3, b: 0 }] },
+            params: {},
+            result: { data: { a: 6, b: 2 } },
+        },
+        {
+            inputs: { array: [{ a: 1 }, { a: 2 }, { a: 3 }] },
+            params: { flatResponse: true },
             result: { a: 6 },
         },
         {
-            inputs: [[{ a: 1, b: -1 }, { c: 10 }], [{ a: 2, b: -1 }], [{ a: 3, b: -2 }, { d: -10 }]],
-            params: {},
+            inputs: { array: [[{ a: 1, b: -1 }, { c: 10 }], [{ a: 2, b: -1 }], [{ a: 3, b: -2 }, { d: -10 }]] },
+            params: { flatResponse: true },
             result: { a: 6, b: -4, c: 10, d: -10 },
         },
         {
-            inputs: [{ a: 1 }],
-            params: {},
+            inputs: { array: [{ a: 1 }] },
+            params: { flatResponse: true },
             result: { a: 1 },
         },
         {
-            inputs: [{ a: 1 }, { a: 2 }],
-            params: {},
+            inputs: { array: [{ a: 1 }, { a: 2 }] },
+            params: { flatResponse: true },
             result: { a: 3 },
         },
         {
-            inputs: [{ a: 1 }, { a: 2 }, { a: 3 }],
-            params: {},
+            inputs: { array: [{ a: 1 }, { a: 2 }, { a: 3 }] },
+            params: { flatResponse: true },
             result: { a: 6 },
         },
         {
-            inputs: [
-                { a: 1, b: 1 },
-                { a: 2, b: 2 },
-                { a: 3, b: 0 },
-            ],
-            params: {},
+            inputs: {
+                array: [
+                    { a: 1, b: 1 },
+                    { a: 2, b: 2 },
+                    { a: 3, b: 0 },
+                ],
+            },
+            params: { flatResponse: true },
             result: { a: 6, b: 3 },
         },
         {
-            inputs: [{ a: 1 }, { a: 2, b: 2 }, { a: 3, b: 0 }],
-            params: {},
+            inputs: { array: [{ a: 1 }, { a: 2, b: 2 }, { a: 3, b: 0 }] },
+            params: { flatResponse: true },
             result: { a: 6, b: 2 },
         },
     ],

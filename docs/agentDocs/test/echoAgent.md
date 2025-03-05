@@ -11,27 +11,22 @@ Echo agent
 ```json
 
 {
-  "type": "array",
   "$schema": "http://json-schema.org/draft-04/schema#",
   "description": "",
-  "minItems": 1,
-  "uniqueItems": true,
-  "items": {
-    "type": "object",
-    "required": [],
-    "properties": {}
-  }
+  "type": "object",
+  "properties": {},
+  "required": []
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
 [
   ":agentId",
-  ":agentId.message"
+  ":agentId.text"
 ]
 
 ````
@@ -51,7 +46,7 @@ Echo agent
 
 ```json
 
-[]
+{}
 
 ````
 
@@ -59,7 +54,7 @@ Echo agent
 
 ```json
 
-{"message":"this is test"}
+{"text":"this is test"}
 
 ````
 
@@ -68,7 +63,7 @@ Echo agent
 ```json
 
 {
-  "message": "this is test"
+  "text": "this is test"
 }
 
 ````
@@ -78,7 +73,7 @@ Echo agent
 
 ```json
 
-[]
+{}
 
 ````
 
@@ -86,7 +81,7 @@ Echo agent
 
 ```json
 
-{"message":"If you add filterParams option, it will respond to filterParams","filterParams":true}
+{"text":"If you add filterParams option, it will respond to filterParams","filterParams":true}
 
 ````
 

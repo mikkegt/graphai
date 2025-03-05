@@ -7,7 +7,7 @@ GraphAI (https://github.com/receptron/graphai) is an open source project, which 
 Here is the "Hello World" of GraphAI. 
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   llm:
     agent: openAIAgent
@@ -17,10 +17,13 @@ nodes:
       prompt: Explain ML's transformer in 100 words.
   output:
     agent: copyAgent
+    params:
+      namedKey: text
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
+      text: :llm.text
+
 ```
 
 It has two nodes:
@@ -58,7 +61,7 @@ A *static nodes* is a place holder of a value, just like a *variable* in compute
 The example below performs the same operation, but uses one *static node*, **prompt**, which holds the value "Explain ML's transformer in 100 words".
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   prompt:
     value: Explain ML's transformer in 100 words.
@@ -70,10 +73,13 @@ nodes:
       prompt: :prompt
   output:
     agent: copyAgent
+    params:
+      namedKey: text
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
+      text: :llm.text
+
 ```
 
 ## Loop
@@ -83,45 +89,43 @@ The dataflow graph needs to be acyclic by design, but we added a few control flo
 Here is a simple application, which uses **loop**.
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :fruits
 nodes:
   fruits:
-    value: [apple, lemon, banana]
+    value:
+      - apple
+      - lemomn
+      - banana
     update: :shift.array
   result:
     value: []
-    update: :reducer
+    update: :reducer.array
     isResult: true
   shift:
     agent: shiftAgent
-    inputs: 
-      array: [:fruits]
-  prompt:
-    agent: stringTemplateAgent
-    params:
-      template: What is the typical color of ${0}? Just answer the color.
-    inputs: [:shift.item]
+    inputs:
+      array: :fruits
   llm:
     agent: openAIAgent
     params:
       model: gpt-4o
-    inputs: 
-      prompt: [:prompt]
+    inputs:
+      prompt: What is the typical color of ${:shift.item}? Just answer the color.
   reducer:
     agent: pushAgent
     inputs:
       array: :result
-      item: :llm.choices.$0.message.content
+      item: :llm.text
+
 ```
 
-1. **fruits**: This static node holds the list of fruits at the begining but updated with the array property of **shift** node after each iteration.
+1. **fruits**: This static node holds the list of fruits at the beginning but updated with the array property of **shift** node after each iteration.
 2. **result**: This static node starts with an empty array, but updated with the value of **reducer** node after each iteration.
 3. **shift**: This node takes the first item from the value from **fruits** node, and output the remaining array and item as properties.
-4. **prompt**: This node creates a prompt by filling the `${0}` of the template string with the item property of the output of **shift** node.
-5. **llm**: This computed node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
-6. **reducer**: This node pushes the content from the output of **llm** node to the value of **result** node.
+4. **llm**: This computed node generates a prompt using the template "What is the typical color of ${:shift.item}? Just answer the color." by applying the item property from the shift node's output. It then passes this prompt to gpt-4o to obtain the generated result.
+5. **reducer**: This node pushes the content from the output of **llm** node to the value of **result** node.
 
 Please notice that each item in the array will be processed sequentially. To process them concurrently, see the section below. 
 
@@ -130,10 +134,13 @@ Please notice that each item in the array will be processed sequentially. To pro
 Here is a simple application, which uses **map**.
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   fruits:
-    value: [apple, lemon, banana]
+    value:
+      - apple
+      - lemomn
+      - banana
   map:
     agent: mapAgent
     inputs:
@@ -141,28 +148,26 @@ nodes:
     isResult: true
     graph:
       nodes:
-        prompt:
-          agent: stringTemplateAgent
-          params:
-            template: What is the typical color of ${0}? Just answer the color.
-          inputs: [:row]
         llm:
           agent: openAIAgent
           params:
             model: gpt-4o
-          inputs: 
-            prompt: [:prompt]
+          inputs:
+            prompt: What is the typical color of ${:row}? Just answer the color.
         result:
           agent: copyAgent
-          inputs: [:llm.choices.$0.message.content]
+          params:
+            namedKey: item
+          inputs:
+            item: :llm.text
           isResult: true
+
 ```
 
 1. **fruits**: This static node holds the list of fruits.
 2. **map**: This node is associated with **mapAgent**, which performs the mapping, by executing the nested graph for each item for the value of **fruits** node, and outputs the combined results.
-3. **prompt**: This node creates a prompt by filling the `${0}` of the template string with each item of the value of **fruits** node.
-4. **llm**: This node gives the generated text by the **prompt** node to `gpt-4o` and outputs the result.
-5. **result**: This node retrieves the content property from the output of **llm** node.
+3. **llm**: This computed node generates a prompt using the template "What is the typical color of ${:row}? Just answer the color." by applying the item property from  the value of **fruits** node. It then passes this prompt to gpt-4o to obtain the generated result.
+4. **result**: This node retrieves the content property from the output of **llm** node.
 
 Please notice that each item in the array will be processed concurrently.
 
@@ -171,119 +176,83 @@ Please notice that each item in the array will be processed concurrently.
 Here is a chatbot application using the loop, which allows the user to talk to the LLM until she/he types "/bye".
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :continue
 nodes:
   continue:
     value: true
-    update: :checkInput.continue
+    update: :checkInput
   messages:
     value: []
-    update: :reducer
+    update: :llm.messages
+    isResult: true
   userInput:
     agent: textInputAgent
     params:
       message: "You:"
+      required: true
   checkInput:
-    agent: propertyFilterAgent
-    params:
-      inspect:
-        - propId: continue
-          notEqual: /bye
+    agent: compareAgent
     inputs:
-      - {}
-      - :userInput
-  userMessage:
-    agent: propertyFilterAgent
-    params:
-      inject:
-        - propId: content
-          from: 1
-    inputs:
-      - role: user
-      - :userInput
-  appendedMessages:
-    agent: pushAgent
-    inputs:
-      array: :messages
-      item: :userMessage
+      array:
+        - :userInput.text
+        - "!="
+        - /bye
   llm:
     agent: openAIAgent
+    params:
+      model: gpt-4o
     inputs:
-      messages: :appendedMessages
+      messages: :messages
+      prompt: :userInput.text
   output:
     agent: stringTemplateAgent
-    params:
-      template: "\e[32mLLM\e[0m: ${0}"
     console:
       after: true
     inputs:
-      - :llm.choices.$0.message.content
-  reducer:
-    agent: pushAgent
-    inputs:
-      array: :appendedMessages
-      item: :llm.choices.$0.message
+      text: "\e[32mAgent\e[0m: ${:llm.text}"
+
 ```
 
 1. The user is prompted to input a message with "You:".
 2. `userInput` captures the user's input.
 3. `checkInput` evaluates if the input is "/bye". If it is, `continue` is set to `false`, stopping the loop.
-4. `userMessage` formats the user's input as a message with the role "user".
-5. `appendedMessages` appends the user's message to the existing messages array.
-6. `llm` uses the updated messages array to generate a response from the AI model.
-7. `output` formats the AI agent's response and prints it to the console.
-8. `reducer` appends the AI agent's response to the messages array.
-9. The loop continues as long as `continue` is `true`.
+4. `llm` uses the updated messages array to generate a response from the AI model.
+5. `output` formats the AI agent's response and prints it to the console.
+6. `reducer` appends the AI agent's response to the messages array.
+7. The loop continues as long as `continue` is `true`.
 
 ## Weather: Function Call and nested graph
 
 Here is an example, which uses the function call capability and nested graph.
 
 ```YAML
-version: 0.3
+version: 0.5
 loop:
   while: :continue
 nodes:
   continue:
     value: true
-    update: :checkInput.continue
+    update: :checkInput
   messages:
     value:
       - role: system
         content: You are a meteorologist. Use getWeather API, only when the user ask for
           the weather information.
-    update: :reducer
+    update: :reducer.array.$0
     isResult: true
   userInput:
     agent: textInputAgent
     params:
       message: "Location:"
   checkInput:
-    agent: propertyFilterAgent
-    params:
-      inspect:
-        - propId: continue
-          notEqual: /bye
+    agent: compareAgent
     inputs:
-      - {}
-      - :userInput
-  userMessage:
-    agent: propertyFilterAgent
-    params:
-      inject:
-        - propId: content
-          from: 1
-    inputs:
-      - role: user
-      - :userInput
-  messagesWithUserInput:
-    agent: pushAgent
-    inputs:
-      array: :messages
-      item: :userMessage
-    if: :checkInput.continue
+      array:
+        - :userInput.text
+        - "!="
+        - /bye
   llmCall:
     agent: openAIAgent
     params:
@@ -304,53 +273,44 @@ nodes:
               required:
                 - latitude
                 - longitude
+      model: gpt-4o
     inputs:
-      messages: :messagesWithUserInput
+      messages: :messages
+      prompt: :userInput.text
+    if: :checkInput
   output:
     agent: stringTemplateAgent
-    params:
-      template: "Weather: ${0}"
+    inputs:
+      text: "Weather: ${:llmCall.text}"
     console:
       after: true
-    inputs:
-      - :llmCall.choices.$0.message.content
-    if: :llmCall.choices.$0.message.content
+    if: :llmCall.text
   messagesWithFirstRes:
     agent: pushAgent
     inputs:
-      array: :messagesWithUserInput
-      item: :llmCall.choices.$0.message
+      array: :messages
+      items:
+        - :userInput.message
+        - :llmCall.message
   tool_calls:
     agent: nestedAgent
     inputs:
-      tool_calls: :llmCall.choices.$0.message.tool_calls
-      messagesWithFirstRes: :messagesWithFirstRes
-    if: :llmCall.choices.$0.message.tool_calls
+      parent_messages: :messagesWithFirstRes.array
+      parent_tool: :llmCall.tool
+    if: :llmCall.tool
     graph:
       nodes:
         outputFetching:
           agent: stringTemplateAgent
-          params:
-            template: "... fetching weather info: ${0}"
+          inputs:
+            text: "... fetching weather info: ${:parent_tool.arguments.latitude},
+              ${:parent_tool.arguments.longitude}"
           console:
             after: true
-          inputs:
-            - :tool_calls.$0.function.arguments
-        parser:
-          agent: jsonParserAgent
-          inputs:
-            - :tool_calls.$0.function.arguments
-        urlPoints:
-          agent: stringTemplateAgent
-          params:
-            template: https://api.weather.gov/points/${0},${1}
-          inputs:
-            - :parser.latitude
-            - :parser.longitude
         fetchPoints:
           agent: fetchAgent
           inputs:
-            url: :urlPoints
+            url: https://api.weather.gov/points/${:parent_tool.arguments.latitude},${:parent_tool.arguments.longitude}
             headers:
               User-Agent: (receptron.org)
         fetchForecast:
@@ -364,67 +324,57 @@ nodes:
           unless: :fetchPoints.onError
         extractError:
           agent: stringTemplateAgent
-          params:
-            template: "${0}: ${1}"
           inputs:
-            - :fetchPoints.onError.error.title
-            - :fetchPoints.onError.error.detail
+            text: "${:fetchPoints.onError.error.title}:
+              ${:fetchPoints.onError.error.detail}"
           if: :fetchPoints.onError
         responseText:
           agent: copyAgent
           anyInput: true
           inputs:
-            - :fetchForecast
-            - :extractError
-        toolMessage:
-          agent: propertyFilterAgent
-          params:
-            inject:
-              - propId: tool_call_id
-                from: 1
-              - propId: name
-                from: 2
-              - propId: content
-                from: 3
-          inputs:
-            - role: tool
-            - :tool_calls.$0.id
-            - :tool_calls.$0.function.name
-            - :responseText
+            array:
+              - :fetchForecast
+              - :extractError
         messagesWithToolRes:
           agent: pushAgent
           inputs:
-            array: :messagesWithFirstRes
-            item: :toolMessage
+            array: :parent_messages
+            item:
+              role: tool
+              tool_call_id: :parent_tool.id
+              name: :parent_tool.name
+              content: :responseText.array.$0
         llmCall:
           agent: openAIAgent
           inputs:
-            messages: :messagesWithToolRes
+            messages: :messagesWithToolRes.array
+          params:
+            model: gpt-4o
         output:
           agent: stringTemplateAgent
-          params:
-            template: "Weather: ${0}"
+          inputs:
+            text: "Weather: ${:llmCall.text}"
           console:
             after: true
-          inputs:
-            - :llmCall.choices.$0.message.content
         messagesWithSecondRes:
           agent: pushAgent
           inputs:
-            array: :messagesWithToolRes
-            item: :llmCall.choices.$0.message
+            array: :messagesWithToolRes.array
+            item: :llmCall.message
           isResult: true
   no_tool_calls:
     agent: copyAgent
-    unless: :llmCall.choices.$0.message.tool_calls
+    unless: :llmCall.tool
     inputs:
-      - :messagesWithFirstRes
+      result: :messagesWithFirstRes.array
   reducer:
     agent: copyAgent
     anyInput: true
     inputs:
-      - :no_tool_calls
-      - :tool_calls.messagesWithSecondRes
+      array:
+        - :no_tool_calls.result
+        - :tool_calls.messagesWithSecondRes.array
+
 ```
 
 1. **Loop Execution**: The graph loops continuously until the condition specified by the `continue` node is false.
@@ -439,7 +389,7 @@ nodes:
 
 It is even possible to let the LLM to dynamically generate a GraphAI yaml and run it, which is an equivalent to the code interpreter.
 
-Here is an example (I'm not able to paste the code here, because thd markdown parser will be confused with embedded json tags):
+Here is an example (I'm not able to paste the code here, because the markdown parser will be confused with embedded json tags):
 
 [https://github.com/receptron/graphai_samples/blob/main/samples/openai/metachat.yaml](https://github.com/receptron/graphai_samples/blob/main/samples/openai/metachat.yaml)
 
@@ -450,19 +400,19 @@ This sample application generates a new GraphAI graph based on a sample GraphAI 
 This sample application performs an in-memory RAG by dividing a Wikipedi article into chunks, get embedding vectors for those chunks and create an appropriate prompt based on the cosine similarities. 
 
 ```YAML
-version: 0.3
+version: 0.5
 nodes:
   source:
     value:
       name: Sam Bankman-Fried
       topic: sentence by the court
-      query: describe the final sentence by the court for Sam Bankman-Fried
+      query: describe the final sentence by the court for Sam Bank-Fried
   wikipedia:
     console:
-      before: ...fetching data from wikipedia
+      before: ...fetching data from wikkpedia
     agent: wikipediaAgent
     inputs:
-      - :source.name
+      query: :source.name
     params:
       lang: en
   chunks:
@@ -471,28 +421,28 @@ nodes:
     agent: stringSplitterAgent
     inputs:
       text: :wikipedia.content
-  embeddings:
+  chunkEmbeddings:
     console:
       before: ...fetching embeddings for chunks
     agent: stringEmbeddingsAgent
     inputs:
-      - :chunks.contents
+      array: :chunks.contents
   topicEmbedding:
     console:
       before: ...fetching embedding for the topic
     agent: stringEmbeddingsAgent
     inputs:
-      - :source.topic
-  similarityCheck:
+      item: :source.topic
+  similarities:
     agent: dotProductAgent
     inputs:
-      matrix: :embeddings
+      matrix: :chunkEmbeddings
       vector: :topicEmbedding.$0
   sortedChunks:
     agent: sortByValuesAgent
     inputs:
       array: :chunks.contents
-      values: :similarityCheck
+      values: :similarities
   referenceText:
     agent: tokenBoundStringsAgent
     inputs:
@@ -502,31 +452,36 @@ nodes:
   prompt:
     agent: stringTemplateAgent
     inputs:
-      - :source.query
-      - :referenceText.content
+      prompt: :source.query
+      text: :referenceText.content
     params:
       template: |-
-        Using the following document, ${0}
+        Using the following document, ${text}
 
-        ${1}
+        ${prompt}
   RagQuery:
     console:
       before: ...performing the RAG query
     agent: openAIAgent
     inputs:
       prompt: :prompt
+    params:
+      model: gpt-4o
   OneShotQuery:
     agent: openAIAgent
     inputs:
       prompt: :source.query
+    params:
+      model: gpt-4o
   RagResult:
     agent: copyAgent
     inputs:
-      - :RagQuery.choices.$0.message.content
+      result: :RagQuery.text
     isResult: true
   OneShotResult:
     agent: copyAgent
     inputs:
-      - :OneShotQuery.choices.$0.message.content
+      result: :OneShotQuery.text
     isResult: true
+
 ```

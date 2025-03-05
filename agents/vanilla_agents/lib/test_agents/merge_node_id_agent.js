@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mergeNodeIdAgent = void 0;
-const mergeNodeIdAgent = async ({ debugInfo: { nodeId }, inputs }) => {
-    // console.log("executing", nodeId);
-    return inputs.reduce((tmp, input) => {
+const agent_utils_1 = require("@graphai/agent_utils");
+const mergeNodeIdAgent = async ({ debugInfo: { nodeId }, namedInputs, }) => {
+    (0, agent_utils_1.arrayValidate)("mergeNodeIdAgent", namedInputs);
+    const dataSet = namedInputs.array;
+    return dataSet.reduce((tmp, input) => {
         return { ...tmp, ...input };
     }, { [nodeId]: "hello" });
 };
@@ -15,7 +17,7 @@ const mergeNodeIdAgentInfo = {
     mock: exports.mergeNodeIdAgent,
     samples: [
         {
-            inputs: [{ message: "hello" }],
+            inputs: { array: [{ message: "hello" }] },
             params: {},
             result: {
                 message: "hello",

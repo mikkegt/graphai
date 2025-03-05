@@ -1,4 +1,4 @@
-import { GraphAI } from "graphai";
+import { GraphAI, graphDataLatestVersion } from "graphai";
 import * as agents from "@graphai/agents";
 import { namedInputValidatorFilter } from "@/index";
 
@@ -14,7 +14,7 @@ const agentFilters = [
 
 test("test validate filter no input error", async () => {
   const graph_data = {
-    version: 0.5,
+    version: graphDataLatestVersion,
     nodes: {
       pop: {
         agent: "popAgent",
@@ -33,14 +33,14 @@ test("test validate filter no input error", async () => {
 
 test("test validate filter int input error", async () => {
   const graph_data = {
-    version: 0.5,
+    version: graphDataLatestVersion,
     nodes: {
       inputs: {
         value: 1,
       },
       pop: {
         agent: "popAgent",
-        inputs: [":inputs"],
+        inputs: { pop: ":inputs" },
       },
     },
   };
@@ -56,14 +56,14 @@ test("test validate filter int input error", async () => {
 
 test("test validate filter array input error", async () => {
   const graph_data = {
-    version: 0.5,
+    version: graphDataLatestVersion,
     nodes: {
       inputs: {
         value: [1, 2, 3],
       },
       pop: {
         agent: "popAgent",
-        inputs: [":inputs"],
+        inputs: { pop: ":inputs" },
       },
     },
   };
@@ -77,9 +77,9 @@ test("test validate filter array input error", async () => {
   );
 });
 
-test("test validate filter array input error", async () => {
+test("test validate filter array input valid", async () => {
   const graph_data = {
-    version: 0.5,
+    version: graphDataLatestVersion,
     nodes: {
       inputs: {
         value: [1, 2, 3],

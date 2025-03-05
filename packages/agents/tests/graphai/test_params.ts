@@ -20,15 +20,15 @@ const graphData_literal = {
       value: { lemon: "yellow" },
     },
     delayed1: {
-      agent: "sleeperAgent",
-      inputs: [":source1"],
+      agent: "sleepAndMergeAgent",
+      inputs: { array: [":source1"] },
     },
     delayed2: {
-      agent: "sleeperAgent",
+      agent: "sleepAndMergeAgent",
       params: {
         duration: 100,
       },
-      inputs: [":source2"],
+      inputs: { array: [":source2"] },
     },
     test1: {
       agent: "testAgent",

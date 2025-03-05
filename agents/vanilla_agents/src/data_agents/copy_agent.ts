@@ -1,8 +1,15 @@
-import { AgentFunction, AgentFunctionInfo } from "graphai";
+import { AgentFunction, AgentFunctionInfo, assert } from "graphai";
+import { isNamedInputs } from "@graphai/agent_utils";
 
-export const copyAgent: AgentFunction = async ({ inputs }) => {
-  const [input] = inputs;
-  return input;
+export const copyAgent: AgentFunction<{
+  namedKey?: string;
+}> = async ({ namedInputs, params }) => {
+  const { namedKey } = params;
+  assert(isNamedInputs(namedInputs), "copyAgent: namedInputs is UNDEFINED!");
+  if (namedKey) {
+    return namedInputs[namedKey];
+  }
+  return namedInputs;
 };
 
 const copyAgentInfo: AgentFunctionInfo = {
@@ -10,24 +17,29 @@ const copyAgentInfo: AgentFunctionInfo = {
   agent: copyAgent,
   mock: copyAgent,
   inputs: {
-    type: "array",
+    anyOf: [{ type: "string" }, { type: "integer" }, { type: "object" }, { type: "array" }],
   },
   output: {
-    type: "any",
+    anyOf: [{ type: "string" }, { type: "integer" }, { type: "object" }, { type: "array" }],
   },
   samples: [
     {
-      inputs: [{ color: "red", model: "Model 3" }],
+      inputs: { color: "red", model: "Model 3" },
       params: {},
       result: { color: "red", model: "Model 3" },
     },
     {
-      inputs: ["Hello World", "Discarded"],
+      inputs: { array: ["Hello World", "Discarded"] },
       params: {},
-      result: "Hello World",
+      result: { array: ["Hello World", "Discarded"] },
+    },
+    {
+      inputs: { color: "red", model: "Model 3" },
+      params: { namedKey: "color" },
+      result: "red",
     },
   ],
-  description: "Returns inputs[0]",
+  description: "Returns namedInputs",
   category: ["data"],
   author: "Receptron team",
   repository: "https://github.com/receptron/graphai",

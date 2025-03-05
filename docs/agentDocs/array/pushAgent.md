@@ -33,11 +33,27 @@ push Agent
         }
       ],
       "description": "the item push into the array"
+    },
+    "items": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "object"
+        },
+        {
+          "type": "array"
+        }
+      ],
+      "description": "the item push into the array"
     }
   },
   "required": [
-    "array",
-    "item"
+    "array"
   ]
 }
 
@@ -48,20 +64,26 @@ push Agent
 ```json
 
 {
-  "type": "array"
+  "type": "object",
+  "properties": {
+    "array": {
+      "type": "array"
+    }
+  }
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
 [
   ":agentId",
-  ":agentId.$0",
-  ":agentId.$1",
-  ":agentId.$2"
+  ":agentId.array",
+  ":agentId.array.$0",
+  ":agentId.array.$1",
+  ":agentId.array.$2"
 ]
 
 ````
@@ -69,10 +91,25 @@ push Agent
 
 [
   ":agentId",
-  ":agentId.$0",
-  ":agentId.$0.apple",
-  ":agentId.$1",
-  ":agentId.$1.lemon"
+  ":agentId.array",
+  ":agentId.array.$0",
+  ":agentId.array.$0.apple",
+  ":agentId.array.$1",
+  ":agentId.array.$1.lemon"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.array",
+  ":agentId.array.$0",
+  ":agentId.array.$0.apple",
+  ":agentId.array.$1",
+  ":agentId.array.$1.lemon",
+  ":agentId.array.$2",
+  ":agentId.array.$2.banana"
 ]
 
 ````
@@ -107,11 +144,13 @@ push Agent
 
 ```json
 
-[
-  1,
-  2,
-  3
-]
+{
+  "array": [
+    1,
+    2,
+    3
+  ]
+}
 
 ````
 ### Sample1
@@ -145,14 +184,67 @@ push Agent
 
 ```json
 
-[
-  {
-    "apple": 1
-  },
-  {
-    "lemon": 2
-  }
-]
+{
+  "array": [
+    {
+      "apple": 1
+    },
+    {
+      "lemon": 2
+    }
+  ]
+}
+
+````
+### Sample2
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "apple": 1
+    }
+  ],
+  "items": [
+    {
+      "lemon": 2
+    },
+    {
+      "banana": 3
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "array": [
+    {
+      "apple": 1
+    },
+    {
+      "lemon": 2
+    },
+    {
+      "banana": 3
+    }
+  ]
+}
 
 ````
 

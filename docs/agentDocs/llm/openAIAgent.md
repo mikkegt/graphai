@@ -156,6 +156,32 @@ OpenAI Agent
         "completion_tokens",
         "total_tokens"
       ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "tool": {
+      "arguments": {
+        "type": "object"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "message": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "content",
+        "role"
+      ]
     }
   },
   "required": [
@@ -170,7 +196,7 @@ OpenAI Agent
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
@@ -233,7 +259,7 @@ OpenAI Agent
     }
   ],
   "created": 1715296589,
-  "model": "gpt-3.5-turbo-0125"
+  "model": "gpt-4o"
 }
 
 ````

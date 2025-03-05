@@ -2,7 +2,7 @@
 
 ## Description
 
-Returns inputs[0]
+Returns namedInputs
 
 ## Schema
 
@@ -11,7 +11,20 @@ Returns inputs[0]
 ```json
 
 {
-  "type": "array"
+  "anyOf": [
+    {
+      "type": "string"
+    },
+    {
+      "type": "integer"
+    },
+    {
+      "type": "object"
+    },
+    {
+      "type": "array"
+    }
+  ]
 }
 
 ````
@@ -21,12 +34,25 @@ Returns inputs[0]
 ```json
 
 {
-  "type": "any"
+  "anyOf": [
+    {
+      "type": "string"
+    },
+    {
+      "type": "integer"
+    },
+    {
+      "type": "object"
+    },
+    {
+      "type": "array"
+    }
+  ]
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
@@ -34,6 +60,16 @@ Returns inputs[0]
   ":agentId",
   ":agentId.color",
   ":agentId.model"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.array",
+  ":agentId.array.$0",
+  ":agentId.array.$1"
 ]
 
 ````
@@ -53,12 +89,10 @@ Returns inputs[0]
 
 ```json
 
-[
-  {
-    "color": "red",
-    "model": "Model 3"
-  }
-]
+{
+  "color": "red",
+  "model": "Model 3"
+}
 
 ````
 
@@ -86,10 +120,12 @@ Returns inputs[0]
 
 ```json
 
-[
-  "Hello World",
-  "Discarded"
-]
+{
+  "array": [
+    "Hello World",
+    "Discarded"
+  ]
+}
 
 ````
 
@@ -105,7 +141,40 @@ Returns inputs[0]
 
 ```json
 
-"Hello World"
+{
+  "array": [
+    "Hello World",
+    "Discarded"
+  ]
+}
+
+````
+### Sample2
+
+#### inputs
+
+```json
+
+{
+  "color": "red",
+  "model": "Model 3"
+}
+
+````
+
+#### params
+
+```json
+
+{"namedKey":"color"}
+
+````
+
+#### result
+
+```json
+
+"red"
 
 ````
 

@@ -25,22 +25,23 @@ const dispatchGraph = {
       agent: "dispatchAgent",
     },
     ghost: {
-      agent: "sleeperAgent",
+      agent: "sleepAndMergeAgent",
       params: {
         duration: 20,
       },
-      inputs: [":select1.next", ":select2.next"],
+      inputs: { array: [":select1.next", ":select2.next"] },
       anyInput: true,
     },
     node: {
       agent: "mergeNodeIdAgent",
+      inputs: { array: [] },
     },
     merge: {
-      inputs: [":node", ":ghost"],
+      inputs: { array: [":node", ":ghost"] },
       agent: "mergeNodeIdAgent",
     },
     result: {
-      inputs: [":merge"],
+      inputs: { array: [":merge"] },
       agent: "mergeNodeIdAgent",
     },
   },
@@ -79,39 +80,39 @@ const dispatchGraph2 = {
       agent: "dispatchAgent",
     },
     ghost1: {
-      agent: "sleeperAgent",
+      agent: "sleepAndMergeAgent",
       params: {
         duration: 20,
       },
-      inputs: [":select.next1"],
+      inputs: { array: [":select.next1"] },
       anyInput: true,
     },
     ghost2: {
-      agent: "sleeperAgent",
+      agent: "sleepAndMergeAgent",
       params: {
         duration: 20,
       },
-      inputs: [":select.next2"],
+      inputs: { array: [":select.next2"] },
       anyInput: true,
     },
     ghost3: {
-      agent: "sleeperAgent",
+      agent: "sleepAndMergeAgent",
       params: {
         duration: 20,
       },
-      inputs: [":select.next3"],
+      inputs: { array: [":select.next3"] },
       anyInput: true,
     },
     result1: {
-      inputs: [":ghost1"],
+      inputs: { array: [":ghost1"] },
       agent: "mergeNodeIdAgent",
     },
     result2: {
-      inputs: [":ghost2"],
+      inputs: { array: [":ghost2"] },
       agent: "mergeNodeIdAgent",
     },
     result3: {
-      inputs: [":ghost3"],
+      inputs: { array: [":ghost3"] },
       agent: "mergeNodeIdAgent",
     },
   },

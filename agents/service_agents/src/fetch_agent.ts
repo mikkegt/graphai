@@ -1,8 +1,27 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
+import type { GraphAIDebug, GraphAIThrowError, GraphAIOnError } from "@graphai/agent_utils";
 import { parseStringPromise } from "xml2js";
 
-export const fetchAgent: AgentFunction<{ debug?: boolean; type?: string }, any, any> = async ({ namedInputs, params }) => {
+type GraphAIHttpDebug = {
+  url?: string;
+  method?: string;
+  headers?: unknown;
+  body?: unknown;
+};
+
+export const fetchAgent: AgentFunction<
+  Partial<GraphAIThrowError & GraphAIDebug & { type?: string }>,
+  GraphAIOnError<string> | GraphAIHttpDebug | string,
+  {
+    url: string;
+    method?: string;
+    queryParams: any;
+    headers: any;
+    body: unknown;
+  }
+> = async ({ namedInputs, params }) => {
   const { url, method, queryParams, headers, body } = namedInputs;
+  const throwError = params.throwError ?? false;
 
   const url0 = new URL(url);
   const headers0 = headers ? { ...headers } : {};
@@ -37,6 +56,9 @@ export const fetchAgent: AgentFunction<{ debug?: boolean; type?: string }, any, 
     const status = response.status;
     const type = params?.type ?? "json";
     const error = type === "json" ? await response.json() : await response.text();
+    if (throwError) {
+      throw new Error(`HTTP error: ${status}`);
+    }
     return {
       onError: {
         message: `HTTP error: ${status}`,

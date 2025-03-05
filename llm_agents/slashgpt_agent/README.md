@@ -9,6 +9,7 @@ SlashGPT agents for GraphAI.
 yarn add @graphai/slashgpt_agent
 ```
 
+
 ### Usage
 
 ```typescript
@@ -20,4 +21,31 @@ const agents = { slashGPTAgent };
 const graph = new GraphAI(graph_data, agents);
 const result = await graph.run();
 ```
+
+### Agents description
+- slashGPTAgent - Slash GPT Agent
+
+### Input/Output/Params Schema & samples
+ - [slashGPTAgent](https://github.com/receptron/graphai/blob/main/docs/agentDocs/llm/slashGPTAgent.md)
+
+### Input/Params example
+ - slashGPTAgent
+
+```typescript
+{
+  "inputs": {},
+  "params": {
+    "query": "Come up with ten business ideas for AI startup"
+  }
+}
+```
+
+
+
+
+
+
+
+
+
 

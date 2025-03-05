@@ -1,17 +1,24 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
 import { ChatCompletionTool, ChatCompletionMessageParam, ChatCompletionToolChoiceOption } from "groq-sdk/resources/chat/completions";
-import { GrapAILLMInputBase } from "@graphai/llm_utils";
+import { GraphAILLMInputBase } from "@graphai/llm_utils";
+import type { GraphAIText, GraphAITool, GraphAIToolCalls, GraphAIMessage, GraphAIMessages } from "@graphai/agent_utils";
 type GroqInputs = {
     verbose?: boolean;
     tools?: ChatCompletionTool[];
     temperature?: number;
     max_tokens?: number;
     tool_choice?: ChatCompletionToolChoiceOption;
-    stream?: boolean;
     messages?: Array<ChatCompletionMessageParam>;
-} & GrapAILLMInputBase;
-export declare const groqAgent: AgentFunction<GroqInputs & {
+} & GraphAILLMInputBase;
+type GroqConfig = {
+    apiKey?: string;
+    stream?: boolean;
+    forWeb?: boolean;
+};
+type GroqParams = GroqInputs & GroqConfig & {
     model: string;
-}, any, string | Array<ChatCompletionMessageParam>, GroqInputs>;
+};
+type GroqResult = Partial<GraphAIText & GraphAITool & GraphAIToolCalls & GraphAIMessage & GraphAIMessages>;
+export declare const groqAgent: AgentFunction<GroqParams, GroqResult, GroqInputs, GroqConfig>;
 declare const groqAgentInfo: AgentFunctionInfo;
 export default groqAgentInfo;

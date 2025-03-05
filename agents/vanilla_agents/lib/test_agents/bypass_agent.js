@@ -1,14 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bypassAgent = void 0;
-const bypassAgent = async ({ params, inputs }) => {
-    if (params && params.firstElement) {
-        return inputs[0];
+// import { isNamedInputs } from "@graphai/agent_utils";
+const bypassAgent = async ({ params, namedInputs }) => {
+    console.warn(`bypassAgent have been deprecated. replace bypassAgent to copyAgent`);
+    const { namedKey } = params;
+    if (namedKey) {
+        return namedInputs[namedKey];
     }
-    if (params && params.flat) {
-        return inputs.flat(params.flat || 1);
-    }
-    return inputs;
+    return namedInputs;
 };
 exports.bypassAgent = bypassAgent;
 // for test and document
@@ -18,40 +18,35 @@ const bypassAgentInfo = {
     mock: exports.bypassAgent,
     samples: [
         {
-            inputs: [{ a: "123" }],
+            inputs: { a: "123" },
             params: {},
-            result: [{ a: "123" }],
+            result: { a: "123" },
         },
         {
-            inputs: [
-                [{ a: "123" }, { b: "abc" }],
-                [{ c: "987" }, { d: "xyz" }],
-            ],
+            inputs: {
+                array: [
+                    [{ a: "123" }, { b: "abc" }],
+                    [{ c: "987" }, { d: "xyz" }],
+                ],
+            },
             params: {},
-            result: [
-                [{ a: "123" }, { b: "abc" }],
-                [{ c: "987" }, { d: "xyz" }],
-            ],
+            result: {
+                array: [
+                    [{ a: "123" }, { b: "abc" }],
+                    [{ c: "987" }, { d: "xyz" }],
+                ],
+            },
         },
+        // named
         {
-            inputs: [
-                [{ a: "123" }, { b: "abc" }],
-                [{ c: "987" }, { d: "xyz" }],
-            ],
-            params: { firstElement: true },
-            result: [{ a: "123" }, { b: "abc" }],
-        },
-        {
-            inputs: [
-                [{ a: "123" }, { b: "abc" }],
-                [{ c: "987" }, { d: "xyz" }],
-            ],
-            params: { flat: 1 },
-            result: [{ a: "123" }, { b: "abc" }, { c: "987" }, { d: "xyz" }],
+            inputs: { a: "123", b: "abc", c: "987", d: "xyz" },
+            params: {},
+            result: { a: "123", b: "abc", c: "987", d: "xyz" },
         },
     ],
     description: "bypass agent",
     category: ["test"],
+    cacheType: "pureAgent",
     author: "Receptron team",
     repository: "https://github.com/receptron/graphai",
     license: "MIT",

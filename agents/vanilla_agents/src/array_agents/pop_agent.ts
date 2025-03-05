@@ -1,7 +1,9 @@
-import { AgentFunction, AgentFunctionInfo, assert } from "graphai";
+import { AgentFunction, AgentFunctionInfo } from "graphai";
+import { arrayValidate } from "@graphai/agent_utils";
+import type { GraphAIArray, GraphAIArrayWithItem } from "@graphai/agent_utils";
 
-export const popAgent: AgentFunction<Record<string, any>, Record<string, any>, Array<any>, { array: Array<unknown> }> = async ({ namedInputs }) => {
-  assert(!!namedInputs, "popAgent: namedInputs is UNDEFINED!");
+export const popAgent: AgentFunction<null, GraphAIArrayWithItem, GraphAIArray> = async ({ namedInputs }) => {
+  arrayValidate("popAgent", namedInputs);
 
   const array = namedInputs.array.map((item: any) => item); // shallow copy
   const item = array.pop();
@@ -66,6 +68,7 @@ const popAgentInfo: AgentFunctionInfo = {
   ],
   description: "Pop Agent",
   category: ["array"],
+  cacheType: "pureAgent",
   author: "Receptron team",
   repository: "https://github.com/receptron/graphai",
   license: "MIT",

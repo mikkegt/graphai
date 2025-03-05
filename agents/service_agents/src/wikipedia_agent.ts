@@ -1,9 +1,12 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
 import wiki from "wikipedia";
 
-export const wikipediaAgent: AgentFunction<{ lang?: string; summary?: boolean }, Record<string, any> | undefined, string> = async ({ inputs, params }) => {
+export const wikipediaAgent: AgentFunction<{ lang?: string; summary?: boolean }, Record<string, any> | undefined, { query: string }> = async ({
+  namedInputs,
+  params,
+}) => {
   const { lang, summary } = params;
-  const query = inputs[0];
+  const { query } = namedInputs;
   try {
     if (lang) {
       wiki.setLang(lang);
@@ -29,7 +32,7 @@ const wikipediaAgentInfo: AgentFunctionInfo = {
   category: ["service"],
   samples: [
     {
-      inputs: ["steve jobs"],
+      inputs: { query: "steve jobs" },
       params: { lang: "ja" },
       result: {
         content:

@@ -2,7 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GraphAI = exports.graphDataLatestVersion = exports.defaultConcurrency = void 0;
 const node_1 = require("./node");
+const result_1 = require("./utils/result");
+const prop_function_1 = require("./utils/prop_function");
 const utils_1 = require("./utils/utils");
+const data_source_1 = require("./utils/data_source");
 const validator_1 = require("./validator");
 const task_manager_1 = require("./task_manager");
 exports.defaultConcurrency = 8;
@@ -10,17 +13,14 @@ exports.graphDataLatestVersion = 0.5;
 class GraphAI {
     // This method is called when either the GraphAI obect was created,
     // or we are about to start n-th iteration (n>2).
-    createNodes(data) {
-        const nodes = Object.keys(data.nodes).reduce((_nodes, nodeId) => {
-            const nodeData = data.nodes[nodeId];
-            if ("value" in nodeData) {
-                _nodes[nodeId] = new node_1.StaticNode(nodeId, nodeData, this);
-            }
-            else if ("agent" in nodeData) {
+    createNodes(graphData) {
+        const nodes = Object.keys(graphData.nodes).reduce((_nodes, nodeId) => {
+            const nodeData = graphData.nodes[nodeId];
+            if ((0, utils_1.isComputedNodeData)(nodeData)) {
                 _nodes[nodeId] = new node_1.ComputedNode(this.graphId, nodeId, nodeData, this);
             }
             else {
-                throw new Error("Unknown node type (neither value nor agent): " + nodeId);
+                _nodes[nodeId] = new node_1.StaticNode(nodeId, nodeData, this);
             }
             return _nodes;
         }, {});
@@ -41,61 +41,82 @@ class GraphAI {
         return nodes;
     }
     getValueFromResults(source, results) {
-        return (0, utils_1.getDataFromSource)(source.nodeId ? results[source.nodeId] : undefined, source);
+        return (0, data_source_1.getDataFromSource)(source.nodeId ? results[source.nodeId] : undefined, source, this.propFunctions);
     }
     // for static
-    initializeNodes(previousResults) {
+    initializeStaticNodes(enableConsoleLog = false) {
         // If the result property is specified, inject it.
         // If the previousResults exists (indicating we are in a loop),
         // process the update property (nodeId or nodeId.propId).
-        Object.keys(this.data.nodes).forEach((nodeId) => {
+        Object.keys(this.graphData.nodes).forEach((nodeId) => {
             const node = this.nodes[nodeId];
             if (node?.isStaticNode) {
                 const value = node?.value;
-                if (value) {
+                if (value !== undefined) {
                     this.injectValue(nodeId, value, nodeId);
                 }
+                if (enableConsoleLog) {
+                    node.consoleLog();
+                }
+            }
+        });
+    }
+    updateStaticNodes(previousResults, enableConsoleLog = false) {
+        // If the result property is specified, inject it.
+        // If the previousResults exists (indicating we are in a loop),
+        // process the update property (nodeId or nodeId.propId).
+        Object.keys(this.graphData.nodes).forEach((nodeId) => {
+            const node = this.nodes[nodeId];
+            if (node?.isStaticNode) {
                 const update = node?.update;
                 if (update && previousResults) {
                     const result = this.getValueFromResults(update, previousResults);
                     this.injectValue(nodeId, result, update.nodeId);
                 }
+                if (enableConsoleLog) {
+                    node.consoleLog();
+                }
             }
         });
     }
-    constructor(data, agentFunctionInfoDictionary, options = {
+    constructor(graphData, agentFunctionInfoDictionary, options = {
         taskManager: undefined,
         agentFilters: [],
         bypassAgentIds: [],
         config: {},
+        graphLoader: undefined,
     }) {
         this.logs = [];
         this.config = {};
         this.onLogCallback = (__log, __isUpdate) => { };
+        this.callbacks = [];
         this.repeatCount = 0;
-        if (!data.version && !options.taskManager) {
+        if (!graphData.version && !options.taskManager) {
             console.warn("------------ missing version number");
         }
-        this.version = data.version ?? exports.graphDataLatestVersion;
+        this.version = graphData.version ?? exports.graphDataLatestVersion;
         if (this.version < exports.graphDataLatestVersion) {
             console.warn(`------------ upgrade to ${exports.graphDataLatestVersion}!`);
         }
-        this.retryLimit = data.retry; // optional
+        this.retryLimit = graphData.retry; // optional
         this.graphId = URL.createObjectURL(new Blob()).slice(-36);
-        this.data = data;
+        this.graphData = graphData;
         this.agentFunctionInfoDictionary = agentFunctionInfoDictionary;
-        this.taskManager = options.taskManager ?? new task_manager_1.TaskManager(data.concurrency ?? exports.defaultConcurrency);
+        this.propFunctions = prop_function_1.propFunctions;
+        this.taskManager = options.taskManager ?? new task_manager_1.TaskManager(graphData.concurrency ?? exports.defaultConcurrency);
         this.agentFilters = options.agentFilters ?? [];
         this.bypassAgentIds = options.bypassAgentIds ?? [];
         this.config = options.config;
-        this.loop = data.loop;
-        this.verbose = data.verbose === true;
-        this.onComplete = () => {
+        this.graphLoader = options.graphLoader;
+        this.loop = graphData.loop;
+        this.verbose = graphData.verbose === true;
+        this.onComplete = (__isAbort) => {
             throw new Error("SOMETHING IS WRONG: onComplete is called without run()");
         };
-        (0, validator_1.validateGraphData)(data, [...Object.keys(agentFunctionInfoDictionary), ...this.bypassAgentIds]);
-        this.nodes = this.createNodes(data);
-        this.initializeNodes();
+        (0, validator_1.validateGraphData)(graphData, [...Object.keys(agentFunctionInfoDictionary), ...this.bypassAgentIds]);
+        (0, validator_1.validateAgent)(agentFunctionInfoDictionary);
+        this.nodes = this.createNodes(graphData);
+        this.initializeStaticNodes(true);
     }
     getAgentFunctionInfo(agentId) {
         if (agentId && this.agentFunctionInfoDictionary[agentId]) {
@@ -106,7 +127,9 @@ class GraphAI {
                 agent: async () => {
                     return null;
                 },
+                hasGraphData: false,
                 inputs: null,
+                cacheType: undefined, // for node.getContext
             };
         }
         // We are not supposed to hit this error because the validator will catch it.
@@ -170,8 +193,13 @@ class GraphAI {
     }
     // Public API
     async run(all = false) {
+        if (Object.values(this.nodes)
+            .filter((node) => node.isStaticNode)
+            .some((node) => node.result === undefined && node.update === undefined)) {
+            throw new Error("Static node must have value. Set value or injectValue or set update");
+        }
         if (this.isRunning()) {
-            throw new Error("This GraphUI instance is already running");
+            throw new Error("This GraphAI instance is already running");
         }
         this.pushReadyNodesIntoQueue();
         if (!this.isRunning()) {
@@ -179,16 +207,33 @@ class GraphAI {
             return {};
         }
         return new Promise((resolve, reject) => {
-            this.onComplete = () => {
+            this.onComplete = (isAbort = false) => {
                 const errors = this.errors();
                 const nodeIds = Object.keys(errors);
-                if (nodeIds.length > 0) {
+                if (nodeIds.length > 0 || isAbort) {
                     reject(errors[nodeIds[0]]);
                 }
                 else {
                     resolve(this.results(all));
                 }
             };
+        });
+    }
+    abort() {
+        if (this.isRunning()) {
+            this.resetPending();
+        }
+        // For an agent like an event agent, where an external promise remains unresolved,
+        // aborting and then retrying can cause nodes or the graph to execute again.
+        // To prevent this, the transactionId is updated to ensure the retry fails.
+        Object.values(this.nodes).forEach((node) => node.isComputedNode && (node.transactionId = undefined));
+        this.onComplete(this.isRunning());
+    }
+    resetPending() {
+        Object.values(this.nodes).map((node) => {
+            if (node.isComputedNode) {
+                node.resetPending();
+            }
         });
     }
     // Public only for testing
@@ -201,7 +246,7 @@ class GraphAI {
         if (this.isRunning() || this.processLoopIfNecessary()) {
             return; // continue running
         }
-        this.onComplete(); // Nothing to run. Finish it.
+        this.onComplete(false); // Nothing to run. Finish it.
     }
     // Must be called only from onExecutionComplete righ after removeRunning
     // Check if there is any running computed nodes.
@@ -209,23 +254,37 @@ class GraphAI {
     processLoopIfNecessary() {
         this.repeatCount++;
         const loop = this.loop;
-        if (loop && (loop.count === undefined || this.repeatCount < loop.count)) {
-            const results = this.results(true); // results from previous loop
-            this.nodes = this.createNodes(this.data);
-            this.initializeNodes(results);
-            // Notice that we need to check the while condition *after* calling initializeNodes.
+        if (!loop) {
+            return false;
+        }
+        // We need to update static nodes, before checking the condition
+        const previousResults = this.results(true); // results from previous loop
+        this.updateStaticNodes(previousResults);
+        if (loop.count === undefined || this.repeatCount < loop.count) {
             if (loop.while) {
-                const source = (0, utils_1.parseNodeName)(loop.while, this.version);
+                const source = (0, utils_1.parseNodeName)(loop.while);
                 const value = this.getValueFromResults(source, this.results(true));
                 // NOTE: We treat an empty array as false.
                 if (!(0, utils_1.isLogicallyTrue)(value)) {
                     return false; // while condition is not met
                 }
             }
+            this.initializeGraphAI();
+            this.updateStaticNodes(previousResults, true);
             this.pushReadyNodesIntoQueue();
             return true; // Indicating that we are going to continue.
         }
         return false;
+    }
+    initializeGraphAI() {
+        if (this.isRunning()) {
+            throw new Error("This GraphAI instance is running");
+        }
+        this.nodes = this.createNodes(this.graphData);
+        this.initializeStaticNodes();
+    }
+    setPreviousResults(previousResults) {
+        this.updateStaticNodes(previousResults);
     }
     setLoopLog(log) {
         log.isLoop = !!this.loop;
@@ -234,9 +293,17 @@ class GraphAI {
     appendLog(log) {
         this.logs.push(log);
         this.onLogCallback(log, false);
+        this.callbacks.forEach((callback) => callback(log, false));
     }
     updateLog(log) {
         this.onLogCallback(log, true);
+        this.callbacks.forEach((callback) => callback(log, false));
+    }
+    registerCallback(callback) {
+        this.callbacks.push(callback);
+    }
+    clearCallbacks() {
+        this.callbacks = [];
     }
     // Public API
     transactionLogs() {
@@ -252,24 +319,15 @@ class GraphAI {
             throw new Error(`injectValue with Invalid nodeId, ${nodeId}`);
         }
     }
-    nestedResultOf(source) {
-        if (Array.isArray(source)) {
-            return source.map((a) => {
-                return this.nestedResultOf(a);
-            });
+    resultsOf(inputs, anyInput = false) {
+        const results = (0, result_1.resultsOf)(inputs ?? [], this.nodes, this.propFunctions);
+        if (anyInput) {
+            return (0, result_1.cleanResult)(results);
         }
-        return this.resultOf(source);
-    }
-    resultsOf(sources) {
-        const ret = {};
-        Object.keys(sources).forEach((key) => {
-            ret[key] = this.nestedResultOf(sources[key]);
-        });
-        return ret;
+        return results;
     }
     resultOf(source) {
-        const { result } = source.nodeId ? this.nodes[source.nodeId] : { result: undefined };
-        return (0, utils_1.getDataFromSource)(result, source);
+        return (0, result_1.resultOf)(source, this.nodes, this.propFunctions);
     }
 }
 exports.GraphAI = GraphAI;

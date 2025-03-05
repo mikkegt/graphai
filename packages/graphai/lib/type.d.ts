@@ -1,5 +1,6 @@
 import type { TransactionLog } from "./transaction_log";
 import type { TaskManager } from "./task_manager";
+import type { GraphAI } from "./graphai";
 export declare enum NodeState {
     Waiting = "waiting",
     Queued = "queued",
@@ -7,14 +8,18 @@ export declare enum NodeState {
     ExecutingServer = "executing-server",
     Failed = "failed",
     TimedOut = "timed-out",
+    Abort = "abort",
     Completed = "completed",
     Injected = "injected",
     Skipped = "skipped"
 }
 export type DefaultResultData = Record<string, any> | string | number | boolean | Array<DefaultResultData>;
 export type DefaultInputData = Record<string, any>;
+export type DefaultConfigData = Record<string, any>;
 export type ResultData<ResultType = DefaultResultData> = ResultType | undefined;
 export type ResultDataDictionary<ResultType = DefaultResultData> = Record<string, ResultData<ResultType>>;
+export type ConfigData<ConfigType = DefaultConfigData> = ConfigType;
+export type ConfigDataDictionary<ConfigType = DefaultConfigData> = Record<string, ConfigType>;
 export type DefaultParamsType = Record<string, any>;
 export type NodeDataParams<ParamsType = DefaultParamsType> = ParamsType;
 export type PassThrough = Record<string, any>;
@@ -23,19 +28,27 @@ export type DataSource = {
     value?: any;
     propIds?: string[];
 };
-export type DataSources = DataSource | DataSource[] | DataSources[];
-export type NestedDataSource = Record<string, DataSources>;
-export type ResultDataSet = ResultData | ResultData[] | ResultDataSet[];
+type ConsoleAttribute = boolean | string | Record<string, any>;
+export type ConsoleElement = boolean | {
+    before?: ConsoleAttribute;
+    after?: ConsoleAttribute;
+};
 export type StaticNodeData = {
-    value: ResultData;
+    value?: ResultData;
     update?: string;
     isResult?: boolean;
+    console?: ConsoleElement;
 };
 export type AgentAnonymousFunction = (...params: any[]) => unknown;
 export type AgentFilterParams = Record<string, any>;
+export type GraphDataLoaderOption = {
+    fileName: string;
+    option?: any;
+};
 export type ComputedNodeData = {
     agent: string | AgentAnonymousFunction;
-    inputs?: Array<any> | Record<string, any>;
+    inputs?: Record<string, any>;
+    output?: Record<string, any>;
     anyInput?: boolean;
     params?: NodeDataParams;
     filterParams?: AgentFilterParams;
@@ -43,16 +56,18 @@ export type ComputedNodeData = {
     timeout?: number;
     if?: string;
     unless?: string;
+    defaultValue?: ResultData;
     graph?: GraphData | string;
+    graphLoader?: GraphDataLoaderOption;
     isResult?: boolean;
     priority?: number;
     passThrough?: PassThrough;
-    console?: Record<string, string | boolean>;
+    console?: ConsoleElement;
 };
 export type NodeData = StaticNodeData | ComputedNodeData;
 export type LoopData = {
     count?: number;
-    while?: string;
+    while?: string | boolean;
 };
 export type GraphData = {
     version?: number;
@@ -61,36 +76,46 @@ export type GraphData = {
     loop?: LoopData;
     verbose?: boolean;
     retry?: number;
+    metadata?: any;
 };
+export type GraphDataLoader = (loaderOption: GraphDataLoaderOption) => GraphData;
 export type GraphOptions = {
     agentFilters?: AgentFilterInfo[] | undefined;
     taskManager?: TaskManager | undefined;
     bypassAgentIds?: string[] | undefined;
-    config?: Record<string, unknown>;
+    config?: ConfigDataDictionary;
+    graphLoader?: GraphDataLoader;
 };
-export type AgentFunctionContext<ParamsType = DefaultParamsType, InputDataType = DefaultInputData, NamedInputDataType = DefaultInputData> = {
+export type CacheTypes = "pureAgent" | "impureAgent";
+export type AgentFunctionContextDebugInfo = {
+    verbose: boolean;
+    nodeId: string;
+    state: string;
+    subGraphs: Map<string, GraphAI>;
+    retry: number;
+    agentId?: string;
+    version?: number;
+    isResult?: boolean;
+};
+export type AgentFunctionContext<ParamsType = DefaultParamsType, NamedInputDataType = DefaultInputData, ConfigType = DefaultConfigData> = {
     params: NodeDataParams<ParamsType>;
-    inputs: Array<InputDataType>;
     inputSchema?: any;
     namedInputs: NamedInputDataType;
-    debugInfo: {
-        verbose: boolean;
-        nodeId: string;
-        retry: number;
-        agentId?: string;
-        version?: number;
-        isResult?: boolean;
+    debugInfo: AgentFunctionContextDebugInfo;
+    forNestedGraph?: {
+        graphData?: GraphData;
+        agents: AgentFunctionInfoDictionary;
+        graphOptions: GraphOptions;
+        onLogCallback?: (log: TransactionLog, isUpdate: boolean) => void;
+        callbacks?: CallbackFunction[];
     };
-    graphData?: GraphData;
-    agents?: AgentFunctionInfoDictionary;
-    taskManager?: TaskManager;
+    cacheType?: CacheTypes;
     filterParams: AgentFilterParams;
-    agentFilters?: AgentFilterInfo[];
     log?: TransactionLog[];
-    config?: Record<string, unknown>;
+    config?: ConfigType;
 };
-export type AgentFunction<ParamsType = DefaultParamsType, ResultType = DefaultResultData, InputDataType = DefaultInputData, NamedInputDataType = DefaultInputData> = (context: AgentFunctionContext<ParamsType, InputDataType, NamedInputDataType>) => Promise<ResultData<ResultType>>;
-export type AgentFilterFunction<ParamsType = DefaultParamsType, ResultType = DefaultResultData, InputDataType = DefaultInputData, NamedInputDataType = DefaultInputData> = (context: AgentFunctionContext<ParamsType, InputDataType, NamedInputDataType>, agent: AgentFunction) => Promise<ResultData<ResultType>>;
+export type AgentFunction<ParamsType = DefaultParamsType, ResultType = DefaultResultData, NamedInputDataType = DefaultInputData, ConfigType = DefaultConfigData> = (context: AgentFunctionContext<ParamsType, NamedInputDataType, ConfigType>) => Promise<ResultData<ResultType>>;
+export type AgentFilterFunction<ParamsType = DefaultParamsType, ResultType = DefaultResultData, NamedInputDataType = DefaultInputData> = (context: AgentFunctionContext<ParamsType, NamedInputDataType>, agent: AgentFunction) => Promise<ResultData<ResultType>>;
 export type AgentFilterInfo = {
     name: string;
     agent: AgentFilterFunction;
@@ -110,16 +135,24 @@ export type AgentFunctionInfo = {
     mock: AgentFunction<any, any, any, any>;
     inputs?: any;
     output?: any;
-    outputFormat?: any;
     params?: any;
+    config?: any;
+    outputFormat?: any;
+    tools?: Record<string, any>[];
     samples: AgentFunctionInfoSample[];
     description: string;
     category: string[];
     author: string;
     repository: string;
     license: string;
+    cacheType?: CacheTypes;
+    environmentVariables?: string[];
+    hasGraphData?: boolean;
     stream?: boolean;
     apiKeys?: string[];
     npms?: string[];
 };
 export type AgentFunctionInfoDictionary = Record<string, AgentFunctionInfo>;
+export type PropFunction = (result: ResultData, propId: string) => ResultData;
+export type CallbackFunction = (log: TransactionLog, isUpdate: boolean) => void;
+export {};

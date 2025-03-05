@@ -1,5 +1,5 @@
 import type { GraphAI, GraphData } from "./index";
-import { NodeDataParams, ResultData, DataSource, ComputedNodeData, StaticNodeData, NodeState, NestedDataSource } from "./type";
+import { NodeDataParams, ResultData, DataSource, ComputedNodeData, StaticNodeData, NodeState, ConsoleElement } from "./type";
 import { TransactionLog } from "./transaction_log";
 export declare class Node {
     readonly nodeId: string;
@@ -8,39 +8,45 @@ export declare class Node {
     result: ResultData | undefined;
     protected graph: GraphAI;
     protected log: TransactionLog;
+    protected console: ConsoleElement;
     constructor(nodeId: string, graph: GraphAI);
     asString(): string;
     protected onSetResult(): void;
+    protected afterConsoleLog(result: ResultData): void;
 }
 export declare class ComputedNode extends Node {
     readonly graphId: string;
     readonly isResult: boolean;
     readonly params: NodeDataParams;
     private readonly filterParams;
-    private readonly dynamicParams;
     readonly nestedGraph?: GraphData | DataSource;
     readonly retryLimit: number;
     retryCount: number;
     private readonly agentId?;
-    private readonly agentFunction?;
+    private agentFunction?;
     readonly timeout?: number;
     readonly priority: number;
     error?: Error;
     transactionId: undefined | number;
     private readonly passThrough?;
     readonly anyInput: boolean;
-    dataSources: NestedDataSource;
+    dataSources: DataSource[];
     private inputs?;
-    inputNames?: Array<string>;
+    private output?;
     pendings: Set<string>;
     private ifSource?;
     private unlessSource?;
-    private console;
+    private defaultValue?;
+    private isSkip;
+    private debugInfo?;
     readonly isStaticNode = false;
     readonly isComputedNode = true;
     constructor(graphId: string, nodeId: string, data: ComputedNodeData, graph: GraphAI);
     getAgentId(): string;
-    private addPengindNode;
+    private getConfig;
+    private addPendingNode;
+    private updateState;
+    resetPending(): void;
     isReadyNode(): boolean;
     private retry;
     private checkDataAvailability;
@@ -51,13 +57,13 @@ export declare class ComputedNode extends Node {
     private shouldApplyAgentFilter;
     private agentFilterHandler;
     execute(): Promise<void>;
+    private afterExecute;
     private prepareExecute;
     private errorProcess;
-    private getNamedInput;
-    private getInputs;
+    private getContext;
+    private getResult;
     private getDebugInfo;
     private beforeConsoleLog;
-    private afterConsoleLog;
 }
 export declare class StaticNode extends Node {
     value?: ResultData;
@@ -67,4 +73,6 @@ export declare class StaticNode extends Node {
     readonly isComputedNode = false;
     constructor(nodeId: string, data: StaticNodeData, graph: GraphAI);
     injectValue(value: ResultData, injectFrom?: string): void;
+    consoleLog(): void;
 }
+export type GraphNodes = Record<string, ComputedNode | StaticNode>;

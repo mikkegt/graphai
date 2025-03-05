@@ -1,6 +1,6 @@
-import type { GraphAI, GraphData } from "@/index";
-import { strIntentionalError } from "@/utils/utils";
-import { inputs2dataSources, namedInputs2dataSources, flatDataSourceNodeIds } from "@/utils/nodeUtils";
+import type { GraphAI, GraphData } from "./index";
+import { strIntentionalError } from "./utils/utils";
+import { inputs2dataSources, dataSourceNodeIds } from "./utils/nodeUtils";
 
 import {
   NodeDataParams,
@@ -13,13 +13,16 @@ import {
   AgentFunction,
   AgentFilterInfo,
   AgentFilterParams,
+  AgentFunctionContextDebugInfo,
   DefaultParamsType,
   DefaultInputData,
-  NestedDataSource,
   PassThrough,
-} from "@/type";
-import { parseNodeName, assert, isLogicallyTrue, isObject } from "@/utils/utils";
-import { TransactionLog } from "@/transaction_log";
+  ConsoleElement,
+  ConfigData,
+} from "./type";
+import { parseNodeName, assert, isLogicallyTrue, isObject } from "./utils/utils";
+import { TransactionLog } from "./transaction_log";
+import { resultsOf } from "./utils/result";
 
 export class Node {
   public readonly nodeId: string;
@@ -29,11 +32,13 @@ export class Node {
 
   protected graph: GraphAI;
   protected log: TransactionLog;
+  protected console: ConsoleElement; // console output option (before and/or after)
 
   constructor(nodeId: string, graph: GraphAI) {
     this.nodeId = nodeId;
     this.graph = graph;
     this.log = new TransactionLog(nodeId);
+    this.console = {};
   }
 
   public asString() {
@@ -51,6 +56,22 @@ export class Node {
       }
     });
   }
+
+  protected afterConsoleLog(result: ResultData) {
+    if (this.console === false) {
+      return;
+    } else if (this.console === true || this.console.after === true) {
+      console.log(typeof result === "string" ? result : JSON.stringify(result, null, 2));
+    } else if (this.console.after) {
+      if (isObject(this.console.after)) {
+        console.log(
+          JSON.stringify(resultsOf(this.console.after, { self: { result } as unknown as ComputedNode | StaticNode }, this.graph.propFunctions, true), null, 2),
+        );
+      } else {
+        console.log(this.console.after);
+      }
+    }
+  }
 }
 
 export class ComputedNode extends Node {
@@ -58,12 +79,11 @@ export class ComputedNode extends Node {
   public readonly isResult: boolean;
   public readonly params: NodeDataParams; // Agent-specific parameters
   private readonly filterParams: AgentFilterParams;
-  private readonly dynamicParams: Record<string, DataSource>;
   public readonly nestedGraph?: GraphData | DataSource;
   public readonly retryLimit: number;
   public retryCount: number = 0;
   private readonly agentId?: string;
-  private readonly agentFunction?: AgentFunction<any, any, any, any>;
+  private agentFunction?: AgentFunction<any, any, any, any>;
   public readonly timeout?: number; // msec
   public readonly priority: number;
   public error?: Error;
@@ -71,13 +91,15 @@ export class ComputedNode extends Node {
   private readonly passThrough?: PassThrough;
 
   public readonly anyInput: boolean; // any input makes this node ready
-  public dataSources: NestedDataSource = {}; // data sources.
-  private inputs?: Array<string>;
-  public inputNames?: Array<string>; // names of named inputs
+  public dataSources: DataSource[] = []; // no longer needed. This is for transaction log.
+  private inputs?: Record<string, any>;
+  private output?: Record<string, any>;
   public pendings: Set<string>; // List of nodes this node is waiting data from.
   private ifSource?: DataSource; // conditional execution
   private unlessSource?: DataSource; // conditional execution
-  private console: Record<string, string | boolean>; // console output option (before and/or after)
+  private defaultValue?: ResultData;
+  private isSkip: boolean = false;
+  private debugInfo?: AgentFunctionContextDebugInfo;
 
   public readonly isStaticNode = false;
   public readonly isComputedNode = true;
@@ -94,43 +116,43 @@ export class ComputedNode extends Node {
     this.isResult = data.isResult ?? false;
     this.priority = data.priority ?? 0;
 
-    this.anyInput = data.anyInput ?? false;
-    if (data.inputs) {
-      if (Array.isArray(data.inputs)) {
-        this.inputs = data.inputs;
-        this.dataSources = inputs2dataSources(data.inputs, graph.version);
-      } else {
-        this.inputNames = Object.keys(data.inputs);
-        this.dataSources = namedInputs2dataSources(data.inputs, graph.version);
-      }
-    }
-    this.pendings = new Set(flatDataSourceNodeIds(Object.values(this.dataSources)));
     assert(["function", "string"].includes(typeof data.agent), "agent must be either string or function");
     if (typeof data.agent === "string") {
       this.agentId = data.agent;
     } else {
       const agent = data.agent;
-      this.agentFunction = this.inputNames ? async ({ namedInputs }) => agent(namedInputs) : async ({ inputs }) => agent(...inputs);
+      this.agentFunction = async ({ namedInputs, params }) => agent(namedInputs, params);
     }
+
+    this.anyInput = data.anyInput ?? false;
+    this.inputs = data.inputs;
+    this.output = data.output;
+    this.dataSources = [
+      ...(data.inputs ? inputs2dataSources(data.inputs).flat(10) : []),
+      ...(data.params ? inputs2dataSources(data.params).flat(10) : []),
+      ...(this.agentId ? [parseNodeName(this.agentId)] : []),
+    ];
+    if (data.inputs && Array.isArray(data.inputs)) {
+      throw new Error(`array inputs have been deprecated. nodeId: ${nodeId}: see https://github.com/receptron/graphai/blob/main/docs/NamedInputs.md`);
+    }
+
+    this.pendings = new Set(dataSourceNodeIds(this.dataSources));
     if (data.graph) {
-      this.nestedGraph = typeof data.graph === "string" ? this.addPengindNode(data.graph) : data.graph;
+      this.nestedGraph = typeof data.graph === "string" ? this.addPendingNode(data.graph) : data.graph;
+    }
+    if (data.graphLoader && graph.graphLoader) {
+      this.nestedGraph = graph.graphLoader(data.graphLoader);
     }
     if (data.if) {
-      this.ifSource = this.addPengindNode(data.if);
+      this.ifSource = this.addPendingNode(data.if);
     }
     if (data.unless) {
-      this.unlessSource = this.addPengindNode(data.unless);
+      this.unlessSource = this.addPendingNode(data.unless);
     }
-    this.dynamicParams = Object.keys(this.params).reduce((tmp: Record<string, DataSource>, key) => {
-      const dataSource = parseNodeName(this.params[key], graph.version < 0.3 ? 0.3 : graph.version);
-      if (dataSource.nodeId) {
-        assert(!this.anyInput, "Dynamic params are not supported with anyInput");
-        tmp[key] = dataSource;
-        this.pendings.add(dataSource.nodeId);
-      }
-      return tmp;
-    }, {});
-
+    if (data.defaultValue) {
+      this.defaultValue = data.defaultValue;
+    }
+    this.isSkip = false;
     this.log.initForComputedNode(this, graph);
   }
 
@@ -138,22 +160,55 @@ export class ComputedNode extends Node {
     return this.agentId ?? "__custom__function"; // only for display purpose in the log.
   }
 
-  private addPengindNode(nodeId: string) {
-    const source = parseNodeName(nodeId, this.graph.version);
+  private getConfig(hasGraphData: boolean, agentId?: string) {
+    if (agentId) {
+      if (hasGraphData) {
+        return this.graph.config;
+      }
+      const config = this.graph.config ?? {};
+      return {
+        ...(config["global"] ?? {}),
+        ...(config[agentId] ?? {}),
+      };
+    }
+    return {};
+  }
+
+  private addPendingNode(nodeId: string) {
+    const source = parseNodeName(nodeId);
     assert(!!source.nodeId, `Invalid data source ${nodeId}`);
     this.pendings.add(source.nodeId);
     return source;
+  }
+
+  private updateState(state: NodeState) {
+    this.state = state;
+    if (this.debugInfo) {
+      this.debugInfo.state = state;
+    }
+  }
+
+  public resetPending() {
+    this.pendings.clear();
+    if (this.state === NodeState.Executing) {
+      this.updateState(NodeState.Abort);
+    }
+    if (this.debugInfo && this.debugInfo.subGraphs) {
+      this.debugInfo.subGraphs.forEach((graph) => graph.abort());
+    }
   }
 
   public isReadyNode() {
     if (this.state !== NodeState.Waiting || this.pendings.size !== 0) {
       return false;
     }
-    if (
+    this.isSkip = !!(
       (this.ifSource && !isLogicallyTrue(this.graph.resultOf(this.ifSource))) ||
       (this.unlessSource && isLogicallyTrue(this.graph.resultOf(this.unlessSource)))
-    ) {
-      this.state = NodeState.Skipped;
+    );
+
+    if (this.isSkip && this.defaultValue === undefined) {
+      this.updateState(NodeState.Skipped);
       this.log.onSkipped(this, this.graph);
       return false;
     }
@@ -164,7 +219,7 @@ export class ComputedNode extends Node {
   // the "retry" if specified. The transaction log must be updated before
   // callling this method.
   private retry(state: NodeState, error: Error) {
-    this.state = state; // this.execute() will update to NodeState.Executing
+    this.updateState(state); // this.execute() will update to NodeState.Executing
     this.log.onError(this, this.graph, error.message);
 
     if (this.retryCount < this.retryLimit) {
@@ -179,14 +234,14 @@ export class ComputedNode extends Node {
   }
 
   private checkDataAvailability() {
-    return Object.values(this.graph.resultsOf(this.dataSources))
+    return Object.values(this.graph.resultsOf(this.inputs))
       .flat()
       .some((result) => result !== undefined);
   }
 
   // This method is called right before the Graph add this node to the task manager.
   public beforeAddTask() {
-    this.state = NodeState.Queued;
+    this.updateState(NodeState.Queued);
     this.log.beforeAddTask(this, this.graph);
   }
 
@@ -217,9 +272,9 @@ export class ComputedNode extends Node {
   }
 
   // Check if we need to apply this filter to this node or not.
-  private shouldApplyAgentFilter(agentFilter: AgentFilterInfo) {
+  private shouldApplyAgentFilter(agentFilter: AgentFilterInfo, agentId?: string) {
     if (agentFilter.agentIds && Array.isArray(agentFilter.agentIds) && agentFilter.agentIds.length > 0) {
-      if (this.agentId && agentFilter.agentIds.includes(this.agentId)) {
+      if (agentId && agentFilter.agentIds.includes(agentId)) {
         return true;
       }
     }
@@ -231,13 +286,13 @@ export class ComputedNode extends Node {
     return !agentFilter.agentIds && !agentFilter.nodeIds;
   }
 
-  private agentFilterHandler(context: AgentFunctionContext, agentFunction: AgentFunction): Promise<ResultData> {
+  private agentFilterHandler(context: AgentFunctionContext, agentFunction: AgentFunction, agentId?: string): Promise<ResultData> {
     let index = 0;
 
     const next = (innerContext: AgentFunctionContext): Promise<ResultData> => {
       const agentFilter = this.graph.agentFilters[index++];
       if (agentFilter) {
-        if (this.shouldApplyAgentFilter(agentFilter)) {
+        if (this.shouldApplyAgentFilter(agentFilter, agentId)) {
           if (agentFilter.filterParams) {
             innerContext.filterParams = { ...agentFilter.filterParams, ...innerContext.filterParams };
           }
@@ -256,7 +311,18 @@ export class ComputedNode extends Node {
   // then it removes itself from the "running node" list of the graph.
   // Notice that setting the result of this node may make other nodes ready to run.
   public async execute() {
-    const previousResults = this.graph.resultsOf(this.dataSources);
+    if (this.isSkip) {
+      this.afterExecute(this.defaultValue, []);
+      return;
+    }
+    const previousResults = this.graph.resultsOf(this.inputs, this.anyInput);
+    const agentId = this.agentId ? (this.graph.resultOf(parseNodeName(this.agentId)) as string) : this.agentId;
+    if (typeof agentId === "function") {
+      this.agentFunction = agentId;
+    }
+    const hasNestedGraph = Boolean(this.nestedGraph) || Boolean(agentId && this.graph.getAgentFunctionInfo(agentId).hasGraphData);
+    const config: ConfigData | undefined = this.getConfig(hasNestedGraph, agentId);
+
     const transactionId = Date.now();
     this.prepareExecute(transactionId, Object.values(previousResults));
 
@@ -267,46 +333,38 @@ export class ComputedNode extends Node {
     }
 
     try {
-      const agentFunction = this.agentFunction ?? this.graph.getAgentFunctionInfo(this.agentId).agent;
+      const agentFunction = this.agentFunction ?? this.graph.getAgentFunctionInfo(agentId).agent;
       const localLog: TransactionLog[] = [];
-      const params = Object.keys(this.dynamicParams).reduce(
-        (tmp, key) => {
-          const result = this.graph.resultOf(this.dynamicParams[key]);
-          tmp[key] = result;
-          return tmp;
-        },
-        { ...this.params },
-      );
-      const context: AgentFunctionContext<DefaultParamsType, DefaultInputData | string | number | boolean | undefined> = {
-        params: params,
-        inputs: this.getInputs(previousResults),
-        namedInputs: this.getNamedInput(previousResults),
-        inputSchema: this.agentFunction ? undefined : this.graph.getAgentFunctionInfo(this.agentId)?.inputs,
-        debugInfo: this.getDebugInfo(),
-        filterParams: this.filterParams,
-        agentFilters: this.graph.agentFilters,
-        config: this.graph.config,
-        log: localLog,
-      };
+      const context = this.getContext(previousResults, localLog, agentId, config);
 
       // NOTE: We use the existence of graph object in the agent-specific params to determine
       // if this is a nested agent or not.
-      if (this.nestedGraph) {
+      if (hasNestedGraph) {
         this.graph.taskManager.prepareForNesting();
-        context.taskManager = this.graph.taskManager;
-        if ("nodes" in this.nestedGraph) {
-          context.graphData = this.nestedGraph;
-        } else {
-          context.graphData = this.graph.resultOf(this.nestedGraph) as GraphData; // HACK: compiler work-around
-        }
-        context.agents = this.graph.agentFunctionInfoDictionary;
+        context.forNestedGraph = {
+          graphData: this.nestedGraph
+            ? "nodes" in this.nestedGraph
+              ? this.nestedGraph
+              : (this.graph.resultOf(this.nestedGraph) as GraphData) // HACK: compiler work-around
+            : { version: 0, nodes: {} },
+          agents: this.graph.agentFunctionInfoDictionary,
+          graphOptions: {
+            agentFilters: this.graph.agentFilters,
+            taskManager: this.graph.taskManager,
+            bypassAgentIds: this.graph.bypassAgentIds,
+            config,
+            graphLoader: this.graph.graphLoader,
+          },
+          onLogCallback: this.graph.onLogCallback,
+          callbacks: this.graph.callbacks,
+        };
       }
 
       this.beforeConsoleLog(context);
-      const result = await this.agentFilterHandler(context as AgentFunctionContext, agentFunction);
+      const result = await this.agentFilterHandler(context as AgentFunctionContext, agentFunction, agentId);
       this.afterConsoleLog(result);
 
-      if (this.nestedGraph) {
+      if (hasNestedGraph) {
         this.graph.taskManager.restoreAfterNesting();
       }
 
@@ -317,31 +375,33 @@ export class ComputedNode extends Node {
         return;
       }
 
-      this.state = NodeState.Completed;
-      this.result = (() => {
-        if (result && this.passThrough) {
-          if (isObject(result) && !Array.isArray(result)) {
-            return { ...result, ...this.passThrough };
-          } else if (Array.isArray(result)) {
-            return result.map((r) => (isObject(r) && !Array.isArray(r) ? { ...r, ...this.passThrough } : r));
-          }
-        }
-        return result;
-      })();
-      this.log.onComplete(this, this.graph, localLog);
-
-      this.onSetResult();
-
-      this.graph.onExecutionComplete(this);
+      // after process
+      this.afterExecute(result, localLog);
     } catch (error) {
-      this.errorProcess(error, transactionId);
+      this.errorProcess(error, transactionId, previousResults);
     }
+  }
+
+  private afterExecute(result: ResultData, localLog: TransactionLog[]) {
+    if (this.state == NodeState.Abort) {
+      return;
+    }
+    this.updateState(NodeState.Completed);
+    this.result = this.getResult(result);
+    if (this.output) {
+      this.result = resultsOf(this.output, { self: this }, this.graph.propFunctions, true);
+    }
+    this.log.onComplete(this, this.graph, localLog);
+
+    this.onSetResult();
+
+    this.graph.onExecutionComplete(this);
   }
 
   // This private method (called only by execute()) prepares the ComputedNode object
   // for execution, and create a new transaction to record it.
   private prepareExecute(transactionId: number, inputs: Array<ResultData>) {
-    this.state = NodeState.Executing;
+    this.updateState(NodeState.Executing);
     this.log.beforeExecute(this, this.graph, transactionId, inputs);
     this.transactionId = transactionId;
   }
@@ -349,9 +409,10 @@ export class ComputedNode extends Node {
   // This private method (called only by execute) processes an error received from
   // the agent function. It records the error in the transaction log and handles
   // the retry if specified.
-  private errorProcess(error: unknown, transactionId: number) {
+  private errorProcess(error: unknown, transactionId: number, namedInputs: DefaultInputData) {
     if (error instanceof Error && error.message !== strIntentionalError) {
       console.error(`<-- NodeId: ${this.nodeId}, Agent: ${this.agentId}`);
+      console.error({ namedInputs });
       console.error(error);
       console.error("-->");
     }
@@ -368,29 +429,41 @@ export class ComputedNode extends Node {
     }
   }
 
-  private getNamedInput(previousResults: Record<string, ResultData | undefined>) {
-    if (this.inputNames) {
-      return this.inputNames.reduce((tmp: Record<string, any>, name) => {
-        if (!this.anyInput || previousResults[name]) {
-          tmp[name] = previousResults[name];
-        }
-        return tmp;
-      }, {});
-    }
-    return {};
-  }
-  private getInputs(previousResults: Record<string, ResultData | undefined>) {
-    if (this.inputNames) {
-      return [];
-    }
-    return (this.inputs ?? []).map((key) => previousResults[String(key)]).filter((a) => !this.anyInput || a);
+  private getContext(previousResults: Record<string, ResultData | undefined>, localLog: TransactionLog[], agentId?: string, config?: ConfigData) {
+    // Pass debugInfo by reference, and the state of this node will be received by agent/agentFilter.
+    // From graphAgent(nested, map), set the instance of graphai, and use abort on the child graphai.
+    this.debugInfo = this.getDebugInfo(agentId);
+    const context: AgentFunctionContext<DefaultParamsType, DefaultInputData | string | number | boolean | undefined> = {
+      params: this.graph.resultsOf(this.params),
+      namedInputs: previousResults,
+      inputSchema: this.agentFunction ? undefined : this.graph.getAgentFunctionInfo(agentId)?.inputs,
+      debugInfo: this.debugInfo,
+      cacheType: this.agentFunction ? undefined : this.graph.getAgentFunctionInfo(agentId)?.cacheType,
+      filterParams: this.filterParams,
+      config,
+      log: localLog,
+    };
+    return context;
   }
 
-  private getDebugInfo() {
+  private getResult(result: ResultData) {
+    if (result && this.passThrough) {
+      if (isObject(result) && !Array.isArray(result)) {
+        return { ...result, ...this.passThrough };
+      } else if (Array.isArray(result)) {
+        return result.map((r) => (isObject(r) && !Array.isArray(r) ? { ...r, ...this.passThrough } : r));
+      }
+    }
+    return result;
+  }
+
+  private getDebugInfo(agentId?: string) {
     return {
       nodeId: this.nodeId,
-      agentId: this.agentId,
+      agentId,
       retry: this.retryCount,
+      state: this.state,
+      subGraphs: new Map(),
       verbose: this.graph.verbose,
       version: this.graph.version,
       isResult: this.isResult,
@@ -398,18 +471,12 @@ export class ComputedNode extends Node {
   }
 
   private beforeConsoleLog(context: AgentFunctionContext<DefaultParamsType, string | number | boolean | DefaultInputData | undefined>) {
-    if (this.console.before === true) {
-      console.log(JSON.stringify(this.inputNames ? context.namedInputs : context.inputs, null, 2));
+    if (this.console === false) {
+      return;
+    } else if (this.console === true || this.console.before === true) {
+      console.log(JSON.stringify(context.namedInputs, null, 2));
     } else if (this.console.before) {
       console.log(this.console.before);
-    }
-  }
-
-  private afterConsoleLog(result: ResultData) {
-    if (this.console.after === true) {
-      console.log(typeof result === "string" ? result : JSON.stringify(result, null, 2));
-    } else if (this.console.after) {
-      console.log(this.console.after);
     }
   }
 }
@@ -424,8 +491,9 @@ export class StaticNode extends Node {
   constructor(nodeId: string, data: StaticNodeData, graph: GraphAI) {
     super(nodeId, graph);
     this.value = data.value;
-    this.update = data.update ? parseNodeName(data.update, graph.version) : undefined;
+    this.update = data.update ? parseNodeName(data.update) : undefined;
     this.isResult = data.isResult ?? false;
+    this.console = data.console ?? {};
   }
 
   public injectValue(value: ResultData, injectFrom?: string) {
@@ -434,4 +502,10 @@ export class StaticNode extends Node {
     this.log.onInjected(this, this.graph, injectFrom);
     this.onSetResult();
   }
+
+  public consoleLog() {
+    this.afterConsoleLog(this.result);
+  }
 }
+
+export type GraphNodes = Record<string, ComputedNode | StaticNode>;

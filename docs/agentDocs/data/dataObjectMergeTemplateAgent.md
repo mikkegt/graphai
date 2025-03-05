@@ -11,28 +11,35 @@ Merge object
 ```json
 
 {
-  "type": "array",
   "$schema": "http://json-schema.org/draft-04/schema#",
   "description": "",
-  "minItems": 1,
-  "uniqueItems": true,
-  "items": {
-    "type": "object",
-    "required": [
-      "content1"
-    ],
-    "properties": {
-      "content1": {
-        "type": "string",
-        "minLength": 1
+  "type": "object",
+  "properties": {
+    "array": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "required": [
+          "content1"
+        ],
+        "properties": {
+          "content1": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
-  }
+  },
+  "required": [
+    "array"
+  ]
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
@@ -87,6 +94,64 @@ Merge object
 ]
 
 ````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.content1",
+  ":agentId.data.content2"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.content1"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.content"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a",
+  ":agentId.data.b",
+  ":agentId.data.c"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.data",
+  ":agentId.data.a",
+  ":agentId.data.a.b",
+  ":agentId.data.a.b.c",
+  ":agentId.data.a.b.c.d",
+  ":agentId.data.b",
+  ":agentId.data.b.c",
+  ":agentId.data.b.c.d",
+  ":agentId.data.b.c.d.e",
+  ":agentId.data.b.d",
+  ":agentId.data.b.d.e",
+  ":agentId.data.b.d.e.f"
+]
+
+````
 
 ## Samples
 
@@ -96,14 +161,16 @@ Merge object
 
 ```json
 
-[
-  {
-    "content1": "hello"
-  },
-  {
-    "content2": "test"
-  }
-]
+{
+  "array": [
+    {
+      "content1": "hello"
+    },
+    {
+      "content2": "test"
+    }
+  ]
+}
 
 ````
 
@@ -111,7 +178,7 @@ Merge object
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -131,11 +198,13 @@ Merge object
 
 ```json
 
-[
-  {
-    "content1": "hello"
-  }
-]
+{
+  "array": [
+    {
+      "content1": "hello"
+    }
+  ]
+}
 
 ````
 
@@ -143,7 +212,7 @@ Merge object
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -162,14 +231,16 @@ Merge object
 
 ```json
 
-[
-  {
-    "content": "hello1"
-  },
-  {
-    "content": "hello2"
-  }
-]
+{
+  "array": [
+    {
+      "content": "hello1"
+    },
+    {
+      "content": "hello2"
+    }
+  ]
+}
 
 ````
 
@@ -177,7 +248,7 @@ Merge object
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -196,21 +267,23 @@ Merge object
 
 ```json
 
-[
-  {
-    "a": 1,
-    "b": 1
-  },
-  {
-    "a": 2,
-    "b": 2
-  },
-  {
-    "a": 3,
-    "b": 0,
-    "c": 5
-  }
-]
+{
+  "array": [
+    {
+      "a": 1,
+      "b": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0,
+      "c": 5
+    }
+  ]
+}
 
 ````
 
@@ -218,7 +291,7 @@ Merge object
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -239,35 +312,37 @@ Merge object
 
 ```json
 
-[
-  {
-    "a": {
+{
+  "array": [
+    {
+      "a": {
+        "b": {
+          "c": {
+            "d": "e"
+          }
+        }
+      }
+    },
+    {
       "b": {
         "c": {
-          "d": "e"
+          "d": {
+            "e": "f"
+          }
         }
       }
-    }
-  },
-  {
-    "b": {
-      "c": {
+    },
+    {
+      "b": {
         "d": {
-          "e": "f"
+          "e": {
+            "f": "g"
+          }
         }
       }
     }
-  },
-  {
-    "b": {
-      "d": {
-        "e": {
-          "f": "g"
-        }
-      }
-    }
-  }
-]
+  ]
+}
 
 ````
 
@@ -275,7 +350,7 @@ Merge object
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -300,6 +375,242 @@ Merge object
     "d": {
       "e": {
         "f": "g"
+      }
+    }
+  }
+}
+
+````
+### Sample5
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "content1": "hello"
+    },
+    {
+      "content2": "test"
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "content1": "hello",
+    "content2": "test"
+  }
+}
+
+````
+### Sample6
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "content1": "hello"
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "content1": "hello"
+  }
+}
+
+````
+### Sample7
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "content": "hello1"
+    },
+    {
+      "content": "hello2"
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "content": "hello2"
+  }
+}
+
+````
+### Sample8
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": 1,
+      "b": 1
+    },
+    {
+      "a": 2,
+      "b": 2
+    },
+    {
+      "a": 3,
+      "b": 0,
+      "c": 5
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": 3,
+    "b": 0,
+    "c": 5
+  }
+}
+
+````
+### Sample9
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    {
+      "a": {
+        "b": {
+          "c": {
+            "d": "e"
+          }
+        }
+      }
+    },
+    {
+      "b": {
+        "c": {
+          "d": {
+            "e": "f"
+          }
+        }
+      }
+    },
+    {
+      "b": {
+        "d": {
+          "e": {
+            "f": "g"
+          }
+        }
+      }
+    }
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "data": {
+    "a": {
+      "b": {
+        "c": {
+          "d": "e"
+        }
+      }
+    },
+    "b": {
+      "c": {
+        "d": {
+          "e": "f"
+        }
+      },
+      "d": {
+        "e": {
+          "f": "g"
+        }
       }
     }
   }

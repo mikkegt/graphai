@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shiftAgent = void 0;
-const graphai_1 = require("graphai");
+const agent_utils_1 = require("@graphai/agent_utils");
 const shiftAgent = async ({ namedInputs }) => {
-    (0, graphai_1.assert)(!!namedInputs, "shiftAgent: namedInputs is UNDEFINED!");
+    (0, agent_utils_1.arrayValidate)("shiftAgent", namedInputs);
     const array = namedInputs.array.map((item) => item); // shallow copy
     const item = array.shift();
     return { array, item };
@@ -56,6 +56,7 @@ const shiftAgentInfo = {
     ],
     description: "shift Agent",
     category: ["array"],
+    cacheType: "pureAgent",
     author: "Receptron team",
     repository: "https://github.com/receptron/graphai",
     license: "MIT",

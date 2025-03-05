@@ -44,19 +44,23 @@ if (!isMainThread && parentPort) {
   });
 }
 
-export const workerAgent: AgentFunction<{ namedInputs?: Array<string> }, any, any> = async ({ inputs, params, /* agents, log, */ graphData }) => {
-  const namedInputs = params.namedInputs ?? inputs.map((__input, index) => `$${index}`);
+export const workerAgent: AgentFunction<null, any, any> = async ({ namedInputs, /* agents, log, */ forNestedGraph }) => {
+  const { graphData } = forNestedGraph ?? {};
   assert(!!graphData, "required");
   assert(typeof graphData === "object", "required");
-  namedInputs.forEach((nodeId, index) => {
-    if (graphData.nodes[nodeId] === undefined) {
-      // If the input node does not exist, automatically create a static node
-      graphData.nodes[nodeId] = { value: inputs[index] };
-    } else {
-      // Otherwise, inject the proper data here (instead of calling injectTo method later)
-      (graphData.nodes[nodeId] as StaticNodeData)["value"] = inputs[index];
-    }
-  });
+
+  const nodeIds = Object.keys(namedInputs);
+  if (nodeIds.length > 0) {
+    nodeIds.forEach((nodeId) => {
+      if (graphData.nodes[nodeId] === undefined) {
+        // If the input node does not exist, automatically create a static node
+        graphData.nodes[nodeId] = { value: namedInputs[nodeId] };
+      } else {
+        // Otherwise, inject the proper data here (instead of calling injectTo method later)
+        (graphData.nodes[nodeId] as StaticNodeData)["value"] = namedInputs[nodeId];
+      }
+    });
+  }
 
   return new Promise((resolve, reject) => {
     const worker = new Worker(__dirname + "/worker_agent");
@@ -81,16 +85,16 @@ const workerAgentInfo: AgentFunctionInfo = {
     {
       inputs: [],
       params: {},
-      result: { message: "May the force be with you" },
+      result: { message: { text: "May the force be with you" } },
       graph: {
-        version: 0.3,
+        version: 0.5,
         nodes: {
           source: {
             value: "May the force be with you",
           },
           message: {
             agent: "copyAgent",
-            inputs: [":source"],
+            inputs: { text: ":source" },
             isResult: true,
           },
         },
@@ -99,16 +103,16 @@ const workerAgentInfo: AgentFunctionInfo = {
     {
       inputs: ["May the force be with you"],
       params: {},
-      result: { message: "May the force be with you" },
+      result: { message: { text: "May the force be with you" } },
       graph: {
-        version: 0.3,
+        version: 0.5,
         nodes: {
           source: {
             value: "TypeScript compiler fails without this node for some reason.",
           },
           message: {
             agent: "copyAgent",
-            inputs: [":$0"],
+            inputs: { text: ":$0" },
             isResult: true,
           },
         },

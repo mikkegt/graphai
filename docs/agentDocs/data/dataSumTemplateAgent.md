@@ -11,7 +11,19 @@ Returns the sum of input values
 ```json
 
 {
-  "type": "array"
+  "type": "object",
+  "properties": {
+    "array": {
+      "type": "array",
+      "description": "the array of numbers to calculate the sum of",
+      "items": {
+        "type": "integer"
+      }
+    }
+  },
+  "required": [
+    "array"
+  ]
 }
 
 ````
@@ -26,8 +38,32 @@ Returns the sum of input values
 
 ````
 
-## Input Format
+## Input example of the next node
 
+```json
+
+[
+  ":agentId",
+  ":agentId.result"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.result"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.result"
+]
+
+````
 ```json
 
 [
@@ -58,9 +94,11 @@ Returns the sum of input values
 
 ```json
 
-[
-  1
-]
+{
+  "array": [
+    1
+  ]
+}
 
 ````
 
@@ -69,6 +107,102 @@ Returns the sum of input values
 ```json
 
 {}
+
+````
+
+#### result
+
+```json
+
+{
+  "result": 1
+}
+
+````
+### Sample1
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    1,
+    2
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "result": 3
+}
+
+````
+### Sample2
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    1,
+    2,
+    3
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "result": 6
+}
+
+````
+### Sample3
+
+#### inputs
+
+```json
+
+{
+  "array": [
+    1
+  ]
+}
+
+````
+
+#### params
+
+```json
+
+{"flatResponse":true}
 
 ````
 
@@ -79,16 +213,18 @@ Returns the sum of input values
 1
 
 ````
-### Sample1
+### Sample4
 
 #### inputs
 
 ```json
 
-[
-  1,
-  2
-]
+{
+  "array": [
+    1,
+    2
+  ]
+}
 
 ````
 
@@ -96,7 +232,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 
@@ -107,17 +243,19 @@ Returns the sum of input values
 3
 
 ````
-### Sample2
+### Sample5
 
 #### inputs
 
 ```json
 
-[
-  1,
-  2,
-  3
-]
+{
+  "array": [
+    1,
+    2,
+    3
+  ]
+}
 
 ````
 
@@ -125,7 +263,7 @@ Returns the sum of input values
 
 ```json
 
-{}
+{"flatResponse":true}
 
 ````
 

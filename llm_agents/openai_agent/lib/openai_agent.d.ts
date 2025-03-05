@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { AgentFunction, AgentFunctionInfo } from "graphai";
-import { GrapAILLMInputBase } from "@graphai/llm_utils";
+import { GraphAILLMInputBase } from "@graphai/llm_utils";
+import type { GraphAINullableText, GraphAITool, GraphAIToolCalls } from "@graphai/agent_utils";
 type OpenAIInputs = {
     model?: string;
     images?: string[];
@@ -9,13 +10,23 @@ type OpenAIInputs = {
     max_tokens?: number;
     verbose?: boolean;
     temperature?: number;
+    messages?: Array<OpenAI.ChatCompletionMessageParam>;
+    response_format?: OpenAI.ResponseFormatText | OpenAI.ResponseFormatJSONObject | OpenAI.ResponseFormatJSONSchema;
+} & GraphAILLMInputBase;
+type OpenAIConfig = {
     baseURL?: string;
     apiKey?: string;
     stream?: boolean;
-    messages?: Array<Record<string, any>>;
     forWeb?: boolean;
-} & GrapAILLMInputBase;
-export declare const openAIAgent: AgentFunction<OpenAIInputs, Record<string, any> | string, string | Array<any>, OpenAIInputs>;
+    model?: string;
+};
+type OpenAIParams = OpenAIInputs & OpenAIConfig;
+type OpenAIResult = Partial<GraphAINullableText & GraphAITool & GraphAIToolCalls & {
+    message: OpenAI.ChatCompletionMessageParam | null;
+} & {
+    messages: OpenAI.ChatCompletionMessageParam[];
+}>;
+export declare const openAIAgent: AgentFunction<OpenAIParams, OpenAIResult, OpenAIInputs, OpenAIConfig>;
 export declare const openAIMockAgent: AgentFunction<{
     model?: string;
     query?: string;

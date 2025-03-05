@@ -11,35 +11,29 @@ bypass agent
 ```json
 
 {
-  "type": "array",
   "$schema": "http://json-schema.org/draft-04/schema#",
   "description": "",
-  "minItems": 1,
-  "uniqueItems": true,
-  "items": {
-    "type": "object",
-    "required": [
-      "a"
-    ],
-    "properties": {
-      "a": {
-        "type": "string",
-        "minLength": 1
-      }
+  "type": "object",
+  "properties": {
+    "a": {
+      "type": "string",
+      "minLength": 1
     }
-  }
+  },
+  "required": [
+    "a"
+  ]
 }
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
 [
   ":agentId",
-  ":agentId.$0",
-  ":agentId.$0.a"
+  ":agentId.a"
 ]
 
 ````
@@ -47,16 +41,17 @@ bypass agent
 
 [
   ":agentId",
-  ":agentId.$0",
-  ":agentId.$0.$0",
-  ":agentId.$0.$0.a",
-  ":agentId.$0.$1",
-  ":agentId.$0.$1.b",
-  ":agentId.$1",
-  ":agentId.$1.$0",
-  ":agentId.$1.$0.c",
-  ":agentId.$1.$1",
-  ":agentId.$1.$1.d"
+  ":agentId.array",
+  ":agentId.array.$0",
+  ":agentId.array.$0.$0",
+  ":agentId.array.$0.$0.a",
+  ":agentId.array.$0.$1",
+  ":agentId.array.$0.$1.b",
+  ":agentId.array.$1",
+  ":agentId.array.$1.$0",
+  ":agentId.array.$1.$0.c",
+  ":agentId.array.$1.$1",
+  ":agentId.array.$1.$1.d"
 ]
 
 ````
@@ -64,25 +59,10 @@ bypass agent
 
 [
   ":agentId",
-  ":agentId.$0",
-  ":agentId.$0.a",
-  ":agentId.$1",
-  ":agentId.$1.b"
-]
-
-````
-```json
-
-[
-  ":agentId",
-  ":agentId.$0",
-  ":agentId.$0.a",
-  ":agentId.$1",
-  ":agentId.$1.b",
-  ":agentId.$2",
-  ":agentId.$2.c",
-  ":agentId.$3",
-  ":agentId.$3.d"
+  ":agentId.a",
+  ":agentId.b",
+  ":agentId.c",
+  ":agentId.d"
 ]
 
 ````
@@ -95,11 +75,9 @@ bypass agent
 
 ```json
 
-[
-  {
-    "a": "123"
-  }
-]
+{
+  "a": "123"
+}
 
 ````
 
@@ -115,11 +93,9 @@ bypass agent
 
 ```json
 
-[
-  {
-    "a": "123"
-  }
-]
+{
+  "a": "123"
+}
 
 ````
 ### Sample1
@@ -128,24 +104,26 @@ bypass agent
 
 ```json
 
-[
-  [
-    {
-      "a": "123"
-    },
-    {
-      "b": "abc"
-    }
-  ],
-  [
-    {
-      "c": "987"
-    },
-    {
-      "d": "xyz"
-    }
+{
+  "array": [
+    [
+      {
+        "a": "123"
+      },
+      {
+        "b": "abc"
+      }
+    ],
+    [
+      {
+        "c": "987"
+      },
+      {
+        "d": "xyz"
+      }
+    ]
   ]
-]
+}
 
 ````
 
@@ -161,24 +139,26 @@ bypass agent
 
 ```json
 
-[
-  [
-    {
-      "a": "123"
-    },
-    {
-      "b": "abc"
-    }
-  ],
-  [
-    {
-      "c": "987"
-    },
-    {
-      "d": "xyz"
-    }
+{
+  "array": [
+    [
+      {
+        "a": "123"
+      },
+      {
+        "b": "abc"
+      }
+    ],
+    [
+      {
+        "c": "987"
+      },
+      {
+        "d": "xyz"
+      }
+    ]
   ]
-]
+}
 
 ````
 ### Sample2
@@ -187,24 +167,12 @@ bypass agent
 
 ```json
 
-[
-  [
-    {
-      "a": "123"
-    },
-    {
-      "b": "abc"
-    }
-  ],
-  [
-    {
-      "c": "987"
-    },
-    {
-      "d": "xyz"
-    }
-  ]
-]
+{
+  "a": "123",
+  "b": "abc",
+  "c": "987",
+  "d": "xyz"
+}
 
 ````
 
@@ -212,7 +180,7 @@ bypass agent
 
 ```json
 
-{"firstElement":true}
+{}
 
 ````
 
@@ -220,69 +188,12 @@ bypass agent
 
 ```json
 
-[
-  {
-    "a": "123"
-  },
-  {
-    "b": "abc"
-  }
-]
-
-````
-### Sample3
-
-#### inputs
-
-```json
-
-[
-  [
-    {
-      "a": "123"
-    },
-    {
-      "b": "abc"
-    }
-  ],
-  [
-    {
-      "c": "987"
-    },
-    {
-      "d": "xyz"
-    }
-  ]
-]
-
-````
-
-#### params
-
-```json
-
-{"flat":1}
-
-````
-
-#### result
-
-```json
-
-[
-  {
-    "a": "123"
-  },
-  {
-    "b": "abc"
-  },
-  {
-    "c": "987"
-  },
-  {
-    "d": "xyz"
-  }
-]
+{
+  "a": "123",
+  "b": "abc",
+  "c": "987",
+  "d": "xyz"
+}
 
 ````
 

@@ -39,12 +39,39 @@ Template agent
 
 ````
 
-## Input Format
+## Input example of the next node
 
 ```json
 
 [
   ":agentId"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.apple",
+  ":agentId.lemon"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.apple",
+  ":agentId.lemon"
+]
+
+````
+```json
+
+[
+  ":agentId",
+  ":agentId.apple",
+  ":agentId.lemon"
 ]
 
 ````
@@ -66,12 +93,12 @@ Template agent
 
 ```json
 
-[
-  {
+{
+  "data": {
     "apple": "red",
     "lemon": "yellow"
   }
-]
+}
 
 ````
 
@@ -79,7 +106,7 @@ Template agent
 
 ```json
 
-{"stringify":true}
+{}
 
 ````
 
@@ -96,9 +123,99 @@ Template agent
 
 ```json
 
-[
-  "{\n  \"apple\": \"red\",\n  \"lemon\": \"yellow\"\n}"
-]
+{
+  "text": "{\n  \"apple\": \"red\",\n  \"lemon\": \"yellow\"\n}"
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "apple": "red",
+  "lemon": "yellow"
+}
+
+````
+### Sample2
+
+#### inputs
+
+```json
+
+{
+  "text": "```\n{\"apple\":\"red\",\"lemon\":\"yellow\"}\n```"
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "apple": "red",
+  "lemon": "yellow"
+}
+
+````
+### Sample3
+
+#### inputs
+
+```json
+
+{
+  "text": "```json\n{\"apple\":\"red\",\"lemon\":\"yellow\"}\n```"
+}
+
+````
+
+#### params
+
+```json
+
+{}
+
+````
+
+#### result
+
+```json
+
+{
+  "apple": "red",
+  "lemon": "yellow"
+}
+
+````
+### Sample4
+
+#### inputs
+
+```json
+
+{
+  "text": "```JSON\n{\"apple\":\"red\",\"lemon\":\"yellow\"}\n```"
+}
 
 ````
 

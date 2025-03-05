@@ -7,22 +7,30 @@
     "build": "yarn workspaces run build",
     "eslint": "yarn workspaces run eslint",
     "format": "yarn workspaces run format",
+    "format_top": "prettier --write src/*.ts",
+    "doc": "yarn workspaces run doc",
+    "monoRepoAgentDoc": "npx tsx src/monoRepoAgentDocs.ts",
+    "markdown": "npx tsx src/markdown.ts",
     "sample": "npx ts-node docs/async/sample1.ts"
   },
   "private": true,
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.8",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@types/node": "^20.14.12",
-    "eslint": "^9.7.0",
-    "globals": "^15.8.0",
-    "prettier": "^3.3.2",
-    "rollup": "^4.18.0",
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "@types/node": "^22.13.9",
+    "eslint": "^9.21.0",
+    "eslint-config-prettier": "^10.0.2",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.3",
+    "rollup": "^4.34.9",
     "ts-node": "^10.9.2",
-    "tsc-alias": "^1.8.8",
+    "tsc-alias": "^1.8.11",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.5.4",
-    "typescript-eslint": "^7.15.0"
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0"
   },
   "workspaces": [
     "packages/*",
@@ -30,5 +38,8 @@
     "llm_agents/*"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.7.0"
+  }
 }

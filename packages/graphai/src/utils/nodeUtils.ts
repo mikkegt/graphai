@@ -1,48 +1,26 @@
-import { parseNodeName } from "./utils";
-import { DataSource, DataSources, NestedDataSource } from "@/type";
+import { parseNodeName, isObject } from "./utils";
+import { DataSource } from "../type";
 
-export const inputs2dataSources = (inputs: string[], graphVersion: number) => {
-  return inputs.reduce((tmp: Record<string, DataSource>, input: string) => {
-    tmp[input] = parseNodeName(input, graphVersion);
-    return tmp;
-  }, {});
-};
-
-const nestedParseNodeName = (input: any, graphVersion: number): DataSources => {
-  if (Array.isArray(input)) {
-    return input.map((inp) => nestedParseNodeName(inp, graphVersion));
+// for dataSource
+export const inputs2dataSources = (inputs: any): DataSource[] => {
+  if (Array.isArray(inputs)) {
+    return inputs.map((inp) => inputs2dataSources(inp)).flat();
   }
-  return parseNodeName(input, graphVersion);
+  if (isObject(inputs)) {
+    return Object.values(inputs)
+      .map((input) => inputs2dataSources(input))
+      .flat();
+  }
+  if (typeof inputs === "string") {
+    const templateMatch = [...inputs.matchAll(/\${(:[^}]+)}/g)].map((m) => m[1]);
+    if (templateMatch.length > 0) {
+      return inputs2dataSources(templateMatch);
+    }
+  }
+
+  return parseNodeName(inputs) as any;
 };
 
-export const namedInputs2dataSources = (inputs: Record<string, any>, graphVersion: number) => {
-  return Object.keys(inputs).reduce((tmp: NestedDataSource, key) => {
-    const input = inputs[key];
-    tmp[key] = nestedParseNodeName(input, graphVersion);
-    return tmp;
-  }, {});
-};
-
-export const flatDataSourceNodeIds = (sources: DataSource[] | DataSources[]): string[] => {
-  return flatDataSource(sources)
-    .filter((source) => source.nodeId)
-    .map((source) => source.nodeId!);
-};
-
-export const flatDataSource = (sources: DataSource[] | DataSources[]): DataSource[] => {
-  return sources
-    .map((source) => {
-      if (Array.isArray(source)) {
-        return source
-          .map((s) => {
-            if (Array.isArray(s)) {
-              return flatDataSource(s);
-            }
-            return s;
-          })
-          .flat();
-      }
-      return source;
-    })
-    .flat();
+export const dataSourceNodeIds = (sources: DataSource[]): string[] => {
+  return sources.filter((source: DataSource) => source.nodeId).map((source) => source.nodeId!);
 };

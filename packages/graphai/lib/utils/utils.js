@@ -1,29 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.defaultTestContext = exports.isLogicallyTrue = exports.debugResultKey = exports.agentInfoWrapper = exports.defaultAgentInfo = exports.strIntentionalError = exports.getDataFromSource = exports.isObject = exports.parseNodeName = exports.sleep = void 0;
+exports.isStaticNodeData = exports.isComputedNodeData = exports.isNamedInputs = exports.defaultTestContext = exports.isLogicallyTrue = exports.debugResultKey = exports.agentInfoWrapper = exports.defaultAgentInfo = exports.strIntentionalError = exports.isNull = exports.isObject = exports.parseNodeName = exports.sleep = void 0;
 exports.assert = assert;
+const type_1 = require("../type");
 const sleep = async (milliseconds) => {
     return await new Promise((resolve) => setTimeout(resolve, milliseconds));
 };
 exports.sleep = sleep;
-const parseNodeName_02 = (inputNodeId) => {
-    if (typeof inputNodeId === "string") {
-        const regex = /^"(.*)"$/;
-        const match = inputNodeId.match(regex);
-        if (match) {
-            return { value: match[1] }; // string literal
+const parseNodeName = (inputNodeId, isSelfNode = false) => {
+    if (isSelfNode) {
+        if (typeof inputNodeId === "string" && inputNodeId[0] === ".") {
+            const parts = inputNodeId.split(".");
+            return { nodeId: "self", propIds: parts.slice(1) };
         }
-        const parts = inputNodeId.split(".");
-        if (parts.length == 1) {
-            return { nodeId: parts[0] };
-        }
-        return { nodeId: parts[0], propIds: parts.slice(1) };
-    }
-    return { value: inputNodeId }; // non-string literal
-};
-const parseNodeName = (inputNodeId, version) => {
-    if (version === 0.2) {
-        return parseNodeName_02(inputNodeId);
+        return { value: inputNodeId };
     }
     if (typeof inputNodeId === "string") {
         const regex = /^:(.*)$/;
@@ -52,41 +42,10 @@ const isObject = (x) => {
     return x !== null && typeof x === "object";
 };
 exports.isObject = isObject;
-const getNestedData = (result, propId) => {
-    if (Array.isArray(result)) {
-        const regex = /^\$(\d+)$/;
-        const match = propId.match(regex);
-        if (match) {
-            const index = parseInt(match[1], 10);
-            return result[index];
-        }
-        if (propId === "$last") {
-            return result[result.length - 1];
-        }
-    }
-    else if ((0, exports.isObject)(result)) {
-        return result[propId];
-    }
-    return undefined;
+const isNull = (data) => {
+    return data === null || data === undefined;
 };
-const innerGetDataFromSource = (result, propIds) => {
-    if (result && propIds && propIds.length > 0) {
-        const propId = propIds[0];
-        const ret = getNestedData(result, propId);
-        if (propIds.length > 1) {
-            return innerGetDataFromSource(ret, propIds.slice(1));
-        }
-        return ret;
-    }
-    return result;
-};
-const getDataFromSource = (result, source) => {
-    if (!source.nodeId) {
-        return source.value;
-    }
-    return innerGetDataFromSource(result, source.propIds);
-};
-exports.getDataFromSource = getDataFromSource;
+exports.isNull = isNull;
 exports.strIntentionalError = "Intentional Error for Debugging";
 exports.defaultAgentInfo = {
     name: "defaultAgentInfo",
@@ -160,9 +119,23 @@ exports.defaultTestContext = {
         nodeId: "test",
         retry: 0,
         verbose: true,
+        state: type_1.NodeState.Executing,
+        subGraphs: new Map(),
     },
     params: {},
     filterParams: {},
     agents: {},
     log: [],
 };
+const isNamedInputs = (namedInputs) => {
+    return (0, exports.isObject)(namedInputs) && !Array.isArray(namedInputs) && Object.keys(namedInputs || {}).length > 0;
+};
+exports.isNamedInputs = isNamedInputs;
+const isComputedNodeData = (node) => {
+    return "agent" in node;
+};
+exports.isComputedNodeData = isComputedNodeData;
+const isStaticNodeData = (node) => {
+    return !("agent" in node);
+};
+exports.isStaticNodeData = isStaticNodeData;

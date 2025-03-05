@@ -2,12 +2,12 @@ import express from "express";
 import * as agents from "@graphai/agents";
 
 import { streamAgentFilterGenerator, agentFilterRunnerBuilder } from "@/index";
-import { AgentFunctionContext, AgentFunctionInfoDictionary } from "graphai";
+import { AgentFunctionContext, AgentFunctionInfoDictionary, NodeState } from "graphai";
 
 export const agentDispatcher = async (req: express.Request, res: express.Response) => {
   const { params } = req;
   const { agentId } = params; // from url
-  const { nodeId, retry, params: agentParams, inputs } = req.body; // post body
+  const { nodeId, retry, params: agentParams, inputs, namedInputs } = req.body; // post body
   const agentInfo = (agents as any)[agentId];
   const stream = agentParams?.stream || false;
 
@@ -17,12 +17,14 @@ export const agentDispatcher = async (req: express.Request, res: express.Respons
 
   const context = {
     params: agentParams || {},
-    inputs,
-    namedInputs: {},
+    inputs: inputs ?? [],
+    namedInputs: namedInputs ?? {},
     debugInfo: {
       nodeId,
       retry,
       verbose: false,
+      state: NodeState.Executing,
+      subGraphs: new Map(),
     },
     filterParams: {},
     agents: agents as AgentFunctionInfoDictionary,

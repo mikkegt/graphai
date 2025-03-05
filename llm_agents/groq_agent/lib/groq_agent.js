@@ -4,7 +4,7 @@ exports.groqAgent = void 0;
 const graphai_1 = require("graphai");
 const groq_sdk_1 = require("groq-sdk");
 const llm_utils_1 = require("@graphai/llm_utils");
-const groq = process.env.GROQ_API_KEY ? new groq_sdk_1.Groq({ apiKey: process.env.GROQ_API_KEY }) : undefined;
+// https://github.com/groq/groq-typescript
 //
 // This agent takes two optional inputs, and following parameters.
 // inputs:
@@ -23,13 +23,51 @@ const groq = process.env.GROQ_API_KEY ? new groq_sdk_1.Groq({ apiKey: process.en
 //
 // https://console.groq.com/docs/quickstart
 //
-const groqAgent = async ({ params, namedInputs, filterParams }) => {
-    (0, graphai_1.assert)(groq !== undefined, "The GROQ_API_KEY environment variable is missing.");
-    const { verbose, system, tools, tool_choice, max_tokens, temperature, stream, prompt, messages } = { ...params, ...namedInputs };
+const convertOpenAIChatCompletion = (response, messages) => {
+    const message = response?.choices[0] && response?.choices[0].message ? response?.choices[0].message : null;
+    const text = message && message.content ? message.content : null;
+    // const functionResponse = message?.tool_calls && message?.tool_calls[0] ? message?.tool_calls[0] : null;
+    const functionResponses = message?.tool_calls && message?.tool_calls.length > 0 ? message?.tool_calls : [];
+    const tool_calls = functionResponses.map((functionResponse) => {
+        return {
+            id: functionResponse.id,
+            name: functionResponse?.function?.name,
+            arguments: (() => {
+                try {
+                    return JSON.parse(functionResponse?.function?.arguments);
+                }
+                catch (__e) {
+                    return undefined;
+                }
+            })(),
+        };
+    });
+    const tool = tool_calls[0] ? tool_calls[0] : undefined;
+    if (message) {
+        messages.push(message);
+    }
+    return {
+        ...response,
+        text,
+        tool,
+        tool_calls,
+        message,
+        messages,
+    };
+};
+const groqAgent = async ({ params, namedInputs, filterParams, config }) => {
+    const { verbose, system, tools, tool_choice, max_tokens, temperature, prompt, messages } = { ...params, ...namedInputs };
+    const { apiKey, stream, forWeb, model } = {
+        ...params,
+        ...(config || {}),
+    };
+    const key = apiKey ?? (process !== undefined ? process.env.GROQ_API_KEY : undefined);
+    (0, graphai_1.assert)(key !== undefined, "The GROQ_API_KEY environment variable adn apiKey is missing.");
+    const groq = new groq_sdk_1.Groq({ apiKey, dangerouslyAllowBrowser: !!forWeb });
     const userPrompt = (0, llm_utils_1.getMergeValue)(namedInputs, params, "mergeablePrompts", prompt);
     const systemPrompt = (0, llm_utils_1.getMergeValue)(namedInputs, params, "mergeableSystem", system);
     // Notice that we ignore params.system if previous_message exists.
-    const messagesCopy = messages ? messages.map((m) => m) : systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
+    const messagesCopy = (0, llm_utils_1.getMessages)(systemPrompt, messages);
     if (userPrompt) {
         messagesCopy.push({
             role: "user",
@@ -41,13 +79,13 @@ const groqAgent = async ({ params, namedInputs, filterParams }) => {
     }
     const streamOption = {
         messages: messagesCopy,
-        model: params.model,
+        model,
         temperature: temperature ?? 0.7,
         stream: true,
     };
     const nonStreamOption = {
         messages: messagesCopy,
-        model: params.model,
+        model,
         temperature: temperature ?? 0.7,
     };
     const options = stream ? streamOption : nonStreamOption;
@@ -60,26 +98,35 @@ const groqAgent = async ({ params, namedInputs, filterParams }) => {
     }
     if (!options.stream) {
         const result = await groq.chat.completions.create(options);
-        return result;
+        return convertOpenAIChatCompletion(result, messagesCopy);
     }
     // streaming
     const pipe = await groq.chat.completions.create(options);
     let lastMessage = null;
     const contents = [];
-    for await (const message of pipe) {
-        const token = message.choices[0].delta.content;
+    for await (const _message of pipe) {
+        const token = _message.choices[0].delta.content;
         if (token) {
             if (filterParams && filterParams.streamTokenCallback) {
                 filterParams.streamTokenCallback(token);
             }
             contents.push(token);
         }
-        lastMessage = message;
+        lastMessage = _message;
     }
+    const text = contents.join("");
+    const message = { role: "assistant", content: text };
     if (lastMessage) {
-        lastMessage.choices[0]["message"] = { role: "assistant", content: contents.join("") };
+        lastMessage.choices[0]["message"] = message;
     }
-    return lastMessage;
+    // maybe not suppor tool when streaming
+    messagesCopy.push(message);
+    return {
+        ...lastMessage,
+        text,
+        message,
+        messages: messagesCopy,
+    };
 };
 exports.groqAgent = groqAgent;
 const groqAgentInfo = {
@@ -120,5 +167,6 @@ const groqAgentInfo = {
     license: "MIT",
     stream: true,
     npms: ["groq-sdk"],
+    environmentVariables: ["GROQ_API_KEY"],
 };
 exports.default = groqAgentInfo;

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { AgentFunction, AgentFunctionInfo, sleep } from "graphai";
-import { GrapAILLMInputBase, getMergeValue } from "@graphai/llm_utils";
+import { GraphAILLMInputBase, getMergeValue, getMessages } from "@graphai/llm_utils";
+import type { GraphAINullableText, GraphAITool, GraphAIToolCalls } from "@graphai/agent_utils";
 
 type OpenAIInputs = {
   model?: string;
@@ -10,28 +11,98 @@ type OpenAIInputs = {
   max_tokens?: number;
   verbose?: boolean;
   temperature?: number;
+  messages?: Array<OpenAI.ChatCompletionMessageParam>;
+  response_format?: OpenAI.ResponseFormatText | OpenAI.ResponseFormatJSONObject | OpenAI.ResponseFormatJSONSchema;
+} & GraphAILLMInputBase;
+
+type OpenAIConfig = {
   baseURL?: string;
   apiKey?: string;
   stream?: boolean;
-  messages?: Array<Record<string, any>>;
   forWeb?: boolean;
-} & GrapAILLMInputBase;
+  model?: string;
+};
 
-export const openAIAgent: AgentFunction<OpenAIInputs, Record<string, any> | string, string | Array<any>, OpenAIInputs> = async ({
-  filterParams,
-  params,
-  namedInputs,
-}) => {
-  const { verbose, system, images, temperature, tools, tool_choice, max_tokens, baseURL, apiKey, stream, prompt, messages, forWeb } = {
+type OpenAIParams = OpenAIInputs & OpenAIConfig;
+
+type OpenAIResult = Partial<
+  GraphAINullableText &
+    GraphAITool &
+    GraphAIToolCalls & { message: OpenAI.ChatCompletionMessageParam | null } & { messages: OpenAI.ChatCompletionMessageParam[] }
+>;
+
+const convToolCall = (tool_call: OpenAI.Chat.Completions.ChatCompletionMessageToolCall) => {
+  return {
+    id: tool_call.id,
+    name: tool_call.function.name,
+    arguments: (() => {
+      try {
+        return JSON.parse(tool_call.function.arguments);
+      } catch (__e) {
+        console.log(__e);
+        return undefined;
+      }
+    })(),
+  };
+};
+
+const convertOpenAIChatCompletion = (response: OpenAI.ChatCompletion, messages: OpenAI.ChatCompletionMessageParam[]) => {
+  const newMessage = response?.choices[0] && response?.choices[0].message ? response?.choices[0].message : null;
+
+  const text = newMessage && newMessage.content ? newMessage.content : null;
+
+  const functionResponses = newMessage?.tool_calls && Array.isArray(newMessage?.tool_calls) ? newMessage?.tool_calls : [];
+  // const functionId = message?.tool_calls && message?.tool_calls[0] ? message?.tool_calls[0]?.id : null;
+
+  const tool_calls = functionResponses.map(convToolCall);
+  const tool = tool_calls && tool_calls.length > 0 ? tool_calls[0] : undefined;
+
+  const message = (() => {
+    if (newMessage) {
+      const { content, role, tool_calls } = newMessage;
+      if (tool_calls && tool_calls.length > 0) {
+        return {
+          content,
+          role,
+          tool_calls,
+        };
+      }
+      return {
+        content,
+        role,
+      };
+    }
+    return null;
+  })();
+
+  if (message) {
+    messages.push(message);
+  }
+  return {
+    ...response,
+    text,
+    tool,
+    tool_calls,
+    message,
+    messages,
+  };
+};
+
+export const openAIAgent: AgentFunction<OpenAIParams, OpenAIResult, OpenAIInputs, OpenAIConfig> = async ({ filterParams, params, namedInputs, config }) => {
+  const { verbose, system, images, temperature, tools, tool_choice, max_tokens, prompt, messages, response_format } = {
     ...params,
     ...namedInputs,
+  };
+
+  const { apiKey, stream, forWeb, model, baseURL } = {
+    ...(config || {}),
+    ...params,
   };
 
   const userPrompt = getMergeValue(namedInputs, params, "mergeablePrompts", prompt);
   const systemPrompt = getMergeValue(namedInputs, params, "mergeableSystem", system);
 
-  // Notice that we ignore params.system if previous_message exists.
-  const messagesCopy: Array<any> = messages ? messages.map((m) => m) : systemPrompt ? [{ role: "system", content: systemPrompt }] : [];
+  const messagesCopy = getMessages<OpenAI.ChatCompletionMessageParam>(systemPrompt, messages);
 
   if (userPrompt) {
     messagesCopy.push({
@@ -40,13 +111,17 @@ export const openAIAgent: AgentFunction<OpenAIInputs, Record<string, any> | stri
     });
   }
   if (images) {
+    const image_url = {
+      url: images[0],
+      detail: "high",
+    };
     messagesCopy.push({
       role: "user",
       content: [
         {
           type: "image_url",
-          image_url: images[0],
-        },
+          image_url,
+        } as OpenAI.ChatCompletionContentPart,
       ],
     });
   }
@@ -57,22 +132,31 @@ export const openAIAgent: AgentFunction<OpenAIInputs, Record<string, any> | stri
 
   const openai = new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: !!forWeb });
 
-  const chatParams = {
-    model: params.model || "gpt-3.5-turbo",
-    messages: messagesCopy,
+  const modelName = model || "gpt-4o";
+  const chatParams: OpenAI.ChatCompletionCreateParams = {
+    model: modelName,
+    messages: messagesCopy as unknown as OpenAI.ChatCompletionMessageParam[],
     tools,
     tool_choice,
     max_tokens,
-    temperature: temperature ?? 0.7,
+    response_format,
   };
+
+  // Reasoning models do not support temperature parameter
+  if (!modelName.startsWith("o1") && !modelName.startsWith("o3")) {
+    chatParams.temperature = temperature ?? 0.7;
+  }
+
   if (!stream) {
-    return await openai.chat.completions.create(chatParams);
+    const result = await openai.chat.completions.create(chatParams);
+    return convertOpenAIChatCompletion(result, messagesCopy);
   }
   const chatStream = openai.beta.chat.completions.stream({
     ...chatParams,
     stream: true,
   });
 
+  // streaming
   for await (const message of chatStream) {
     const token = message.choices[0].delta.content;
     if (filterParams && filterParams.streamTokenCallback && token) {
@@ -81,7 +165,7 @@ export const openAIAgent: AgentFunction<OpenAIInputs, Record<string, any> | stri
   }
 
   const chatCompletion = await chatStream.finalChatCompletion();
-  return chatCompletion;
+  return convertOpenAIChatCompletion(chatCompletion, messagesCopy);
 };
 
 const input_sample = "this is response result";
@@ -100,7 +184,7 @@ const result_sample = {
     },
   ],
   created: 1715296589,
-  model: "gpt-3.5-turbo-0125",
+  model: "gpt-4o",
 };
 
 export const openAIMockAgent: AgentFunction<
@@ -215,6 +299,29 @@ const openaiAgentInfo: AgentFunctionInfo = {
         },
         required: ["prompt_tokens", "completion_tokens", "total_tokens"],
       },
+      text: {
+        type: "string",
+      },
+      tool: {
+        arguments: {
+          type: "object",
+        },
+        name: {
+          type: "string",
+        },
+      },
+      message: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+          },
+          role: {
+            type: "string",
+          },
+        },
+        required: ["content", "role"],
+      },
     },
     required: ["id", "object", "created", "model", "choices", "usage"],
   },
@@ -255,6 +362,7 @@ const openaiAgentInfo: AgentFunctionInfo = {
   license: "MIT",
   stream: true,
   npms: ["openai"],
+  environmentVariables: ["OPENAI_API_KEY"],
 };
 
 export default openaiAgentInfo;

@@ -1,7 +1,19 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
+import type { GraphAIDebug, GraphAIThrowError } from "@graphai/agent_utils";
 
-export const vanillaFetchAgent: AgentFunction<{ debug?: boolean; type?: string }, any, any> = async ({ namedInputs, params }) => {
+export const vanillaFetchAgent: AgentFunction<
+  Partial<GraphAIDebug & GraphAIThrowError & { type: string }>,
+  unknown,
+  {
+    url: string;
+    method?: string;
+    queryParams: any;
+    headers: any;
+    body: unknown;
+  }
+> = async ({ namedInputs, params }) => {
   const { url, method, queryParams, headers, body } = namedInputs;
+  const throwError = params.throwError ?? false;
 
   const url0 = new URL(url);
   const headers0 = headers ? { ...headers } : {};
@@ -36,6 +48,9 @@ export const vanillaFetchAgent: AgentFunction<{ debug?: boolean; type?: string }
     const status = response.status;
     const type = params?.type ?? "json";
     const error = type === "json" ? await response.json() : await response.text();
+    if (throwError) {
+      throw new Error(`HTTP error: ${status}`);
+    }
     return {
       onError: {
         message: `HTTP error: ${status}`,

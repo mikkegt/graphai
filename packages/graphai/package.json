@@ -1,16 +1,18 @@
 {
   "name": "graphai",
-  "version": "0.5.7",
+  "version": "1.0.0",
   "description": "Asynchronous data flow execution engine for agentic AI apps.",
-  "main": "lib/index.js",
+  "main": "lib/bundle.cjs.js",
+  "module": "lib/bundle.esm.js",
+  "browser": "lib/bundle.umd.js",
   "files": [
     "./lib"
   ],
   "scripts": {
-    "build": "rm -r lib/* && tsc && tsc-alias",
+    "build": "rm -r lib/* && tsc && npx rollup -c && tsc-alias",
     "eslint": "eslint",
-    "rollup": "npx rollup -c",
-    "doc": " npx typedoc src/index.ts --out ../../docs/apiDoc",
+    "typedoc": "npx typedoc src/index.ts --out ../../docs/apiDoc",
+    "doc": "echo nothing",
     "format": "prettier --write '{src,tests,samples}/**/*.ts' *.mjs",
     "test": "node --test  -r tsconfig-paths/register --require ts-node/register ./tests/**/test_*.ts",
     "b": "yarn run format && yarn run eslint && yarn run build"
@@ -26,7 +28,7 @@
   },
   "homepage": "https://github.com/receptron/graphai#readme",
   "devDependencies": {
-    "typedoc": "^0.26.5"
+    "typedoc": "^0.27.9"
   },
   "types": "./lib/index.d.ts",
   "directories": {

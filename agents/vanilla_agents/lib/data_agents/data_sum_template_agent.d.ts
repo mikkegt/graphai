@@ -1,4 +1,7 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
-export declare const dataSumTemplateAgent: AgentFunction<Record<string, any>, number, number>;
+import type { GraphAIArray, GraphAIResult } from "@graphai/agent_utils";
+export declare const dataSumTemplateAgent: AgentFunction<{
+    flatResponse?: boolean;
+}, number | GraphAIResult<number>, GraphAIArray<number>>;
 declare const dataSumTemplateAgentInfo: AgentFunctionInfo;
 export default dataSumTemplateAgentInfo;

@@ -16,13 +16,15 @@ const graph_data = {
         model: "mixtral-8x7b-32768",
         stream: true,
       },
+      isResult: true,
       inputs: {
         prompt: query,
       },
     },
     answer: {
-      agent: "sleeperAgent",
-      inputs: [":query.choices.$0.message"],
+      agent: "copyAgent",
+      params: { namedKey: "text" },
+      inputs: { text: ":query.text" },
       isResult: true,
     },
   },

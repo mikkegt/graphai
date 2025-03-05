@@ -1,5 +1,6 @@
-import type { TransactionLog } from "@/transaction_log";
-import type { TaskManager } from "@/task_manager";
+import type { TransactionLog } from "./transaction_log";
+import type { TaskManager } from "./task_manager";
+import type { GraphAI } from "./graphai";
 
 export enum NodeState {
   Waiting = "waiting",
@@ -8,6 +9,7 @@ export enum NodeState {
   ExecutingServer = "executing-server",
   Failed = "failed",
   TimedOut = "timed-out",
+  Abort = "abort",
   Completed = "completed",
   Injected = "injected",
   Skipped = "skipped",
@@ -15,9 +17,12 @@ export enum NodeState {
 
 export type DefaultResultData = Record<string, any> | string | number | boolean | Array<DefaultResultData>;
 export type DefaultInputData = Record<string, any>;
+export type DefaultConfigData = Record<string, any>;
 export type ResultData<ResultType = DefaultResultData> = ResultType | undefined;
 export type ResultDataDictionary<ResultType = DefaultResultData> = Record<string, ResultData<ResultType>>;
 
+export type ConfigData<ConfigType = DefaultConfigData> = ConfigType;
+export type ConfigDataDictionary<ConfigType = DefaultConfigData> = Record<string, ConfigType>;
 export type DefaultParamsType = Record<string, any>;
 export type NodeDataParams<ParamsType = DefaultParamsType> = ParamsType; // Agent-specific parameters
 
@@ -29,23 +34,25 @@ export type DataSource = {
   propIds?: string[];
 };
 
-export type DataSources = DataSource | DataSource[] | DataSources[];
-export type NestedDataSource = Record<string, DataSources>;
-
-export type ResultDataSet = ResultData | ResultData[] | ResultDataSet[];
+type ConsoleAttribute = boolean | string | Record<string, any>;
+export type ConsoleElement = boolean | { before?: ConsoleAttribute; after?: ConsoleAttribute };
 
 export type StaticNodeData = {
-  value: ResultData; // initial value for static node.
+  value?: ResultData; // initial value for static node.
   update?: string; // nodeId (+.propId) to get value after a loop
   isResult?: boolean;
+  console?: ConsoleElement;
 };
 export type AgentAnonymousFunction = (...params: any[]) => unknown;
 
 export type AgentFilterParams = Record<string, any>;
 
+export type GraphDataLoaderOption = { fileName: string; option?: any };
+
 export type ComputedNodeData = {
   agent: string | AgentAnonymousFunction;
-  inputs?: Array<any> | Record<string, any>;
+  inputs?: Record<string, any>;
+  output?: Record<string, any>;
   anyInput?: boolean; // any input makes this node ready
   params?: NodeDataParams;
   filterParams?: AgentFilterParams; // agent filter
@@ -53,18 +60,20 @@ export type ComputedNodeData = {
   timeout?: number; // msec
   if?: string; // conditional execution
   unless?: string; // conditional execution
+  defaultValue?: ResultData;
   graph?: GraphData | string;
+  graphLoader?: GraphDataLoaderOption;
   isResult?: boolean;
   priority?: number; // The default is 0.
   passThrough?: PassThrough; // data that pass trough to result
-  console?: Record<string, string | boolean>;
+  console?: ConsoleElement;
 };
 
 export type NodeData = StaticNodeData | ComputedNodeData;
 
 export type LoopData = {
   count?: number;
-  while?: string;
+  while?: string | boolean;
 };
 
 export type GraphData = {
@@ -74,50 +83,61 @@ export type GraphData = {
   loop?: LoopData;
   verbose?: boolean;
   retry?: number;
+  metadata?: any; // Stores information about GraphData. GraphAI itself is not used this data.
 };
+
+export type GraphDataLoader = (loaderOption: GraphDataLoaderOption) => GraphData;
 
 export type GraphOptions = {
   agentFilters?: AgentFilterInfo[] | undefined;
   taskManager?: TaskManager | undefined;
   bypassAgentIds?: string[] | undefined;
-  config?: Record<string, unknown>;
+  config?: ConfigDataDictionary;
+  graphLoader?: GraphDataLoader;
 };
 
-export type AgentFunctionContext<ParamsType = DefaultParamsType, InputDataType = DefaultInputData, NamedInputDataType = DefaultInputData> = {
+export type CacheTypes = "pureAgent" | "impureAgent";
+
+export type AgentFunctionContextDebugInfo = {
+  verbose: boolean;
+  nodeId: string;
+  state: string;
+  subGraphs: Map<string, GraphAI>;
+  retry: number;
+  agentId?: string;
+  version?: number;
+  isResult?: boolean;
+};
+
+export type AgentFunctionContext<ParamsType = DefaultParamsType, NamedInputDataType = DefaultInputData, ConfigType = DefaultConfigData> = {
   params: NodeDataParams<ParamsType>;
-  inputs: Array<InputDataType>;
   inputSchema?: any;
   namedInputs: NamedInputDataType;
-  debugInfo: {
-    verbose: boolean;
-    nodeId: string;
-    retry: number;
-    agentId?: string;
-    version?: number;
-    isResult?: boolean;
+  debugInfo: AgentFunctionContextDebugInfo;
+  forNestedGraph?: {
+    graphData?: GraphData; // nested graph
+    agents: AgentFunctionInfoDictionary; // for nested graph
+    graphOptions: GraphOptions;
+    onLogCallback?: (log: TransactionLog, isUpdate: boolean) => void;
+    callbacks?: CallbackFunction[];
   };
-  graphData?: GraphData; // nested graph
-  agents?: AgentFunctionInfoDictionary; // for nested graph
-  taskManager?: TaskManager; // for nested graph
+  cacheType?: CacheTypes;
   filterParams: AgentFilterParams; // agent filter
-  agentFilters?: AgentFilterInfo[];
   log?: TransactionLog[];
-  config?: Record<string, unknown>;
+  config?: ConfigType;
 };
 
 export type AgentFunction<
   ParamsType = DefaultParamsType,
   ResultType = DefaultResultData,
-  InputDataType = DefaultInputData,
   NamedInputDataType = DefaultInputData,
-> = (context: AgentFunctionContext<ParamsType, InputDataType, NamedInputDataType>) => Promise<ResultData<ResultType>>;
+  ConfigType = DefaultConfigData,
+> = (context: AgentFunctionContext<ParamsType, NamedInputDataType, ConfigType>) => Promise<ResultData<ResultType>>;
 
-export type AgentFilterFunction<
-  ParamsType = DefaultParamsType,
-  ResultType = DefaultResultData,
-  InputDataType = DefaultInputData,
-  NamedInputDataType = DefaultInputData,
-> = (context: AgentFunctionContext<ParamsType, InputDataType, NamedInputDataType>, agent: AgentFunction) => Promise<ResultData<ResultType>>;
+export type AgentFilterFunction<ParamsType = DefaultParamsType, ResultType = DefaultResultData, NamedInputDataType = DefaultInputData> = (
+  context: AgentFunctionContext<ParamsType, NamedInputDataType>,
+  agent: AgentFunction,
+) => Promise<ResultData<ResultType>>;
 
 export type AgentFilterInfo = {
   name: string;
@@ -138,20 +158,28 @@ export type AgentFunctionInfo = {
   name: string;
   agent: AgentFunction<any, any, any, any>;
   mock: AgentFunction<any, any, any, any>;
-  inputs?: any;
-  output?: any;
+  inputs?: any; // inputs data schema
+  output?: any; // output data schema
+  params?: any; // params data schema
+  config?: any; // config data schema
   outputFormat?: any;
-  params?: any;
-  samples: AgentFunctionInfoSample[];
+  tools?: Record<string, any>[]; // function calling(tools) schema.
+  samples: AgentFunctionInfoSample[]; // sample data. This is for document and unit test.
   description: string;
   category: string[];
   author: string;
   repository: string;
   license: string;
-
-  stream?: boolean;
+  cacheType?: CacheTypes;
+  environmentVariables?: string[]; // Environment variables required for execution
+  hasGraphData?: boolean; // The agent that executes graph data using nestedAgentGenerator is true
+  stream?: boolean; // is stream support?
   apiKeys?: string[];
   npms?: string[];
 };
 
 export type AgentFunctionInfoDictionary = Record<string, AgentFunctionInfo>;
+
+export type PropFunction = (result: ResultData, propId: string) => ResultData;
+
+export type CallbackFunction = (log: TransactionLog, isUpdate: boolean) => void;

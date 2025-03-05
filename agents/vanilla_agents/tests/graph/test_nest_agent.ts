@@ -1,69 +1,60 @@
+import { GraphAI } from "graphai";
 import { graphDataTestRunner } from "@receptron/test_utils";
 import * as agents from "@graphai/agents";
+
+import { nestedGraphData, nestedGraphData2, nestedGraphDataError, graphString } from "./graphData";
 
 import test from "node:test";
 import assert from "node:assert";
 
-const graph_data = {
-  version: 0.5,
-  nodes: {
-    source: {
-      value: "Hello World",
-    },
-    nestedNode: {
-      agent: "nestedAgent",
-      inputs: { inner0: ":source" },
-      isResult: true,
-      graph: {
-        nodes: {
-          result: {
-            agent: "copyAgent",
-            inputs: [":inner0"],
-            isResult: true,
-          },
-        },
-      },
-    },
-  },
-};
-
 test("test nested agent", async () => {
-  const result = await graphDataTestRunner(__dirname, __filename, graph_data, agents, () => {}, false);
+  const result = await graphDataTestRunner(__dirname, __filename, nestedGraphData, agents, () => {}, false);
   assert.deepStrictEqual(result, {
     nestedNode: {
-      result: "Hello World",
+      resultInner: {
+        text: "Hello World",
+      },
     },
   });
 });
 
-const graph_data2 = {
-  version: 0.5,
-  nodes: {
-    source: {
-      value: "Hello World",
-    },
-    nestedNode: {
-      agent: "nestedAgent",
-      inputs: { source: ":source" },
-      isResult: true,
-      graph: {
-        nodes: {
-          result: {
-            agent: "copyAgent",
-            inputs: [":source"],
-            isResult: true,
-          },
-        },
-      },
-    },
-  },
-};
-
 test("test nested agent 2", async () => {
-  const result = await graphDataTestRunner(__dirname, __filename, graph_data2, agents, () => {}, false);
+  const result = await graphDataTestRunner(__dirname, __filename, nestedGraphData2, agents, () => {}, false);
   assert.deepStrictEqual(result, {
     nestedNode: {
-      result: "Hello World",
+      result: {
+        text: "Hello World",
+      },
     },
   });
+});
+
+test("test nested agent 3", async () => {
+  const logIds: string[] = [];
+  const graph = new GraphAI(nestedGraphData, agents);
+  graph.onLogCallback = (log, __flag) => {
+    logIds.push(log.nodeId);
+  };
+  await graph.run();
+  // console.log(logIds);
+
+  assert.deepStrictEqual(logIds, ["nestedNode", "nestedNode", "resultInner", "resultInner", "resultInner", "nestedNode"]);
+});
+
+test("test nested agent 4", async () => {
+  const graph = new GraphAI(nestedGraphDataError, agents);
+  await assert.rejects(
+    async () => {
+      await graph.run();
+    },
+    { name: "Error", message: "\x1B[41mInputs not match: NodeId result, Inputs: soi_source\x1B[0m" },
+  );
+});
+
+test("test nested agent 5", async () => {
+  const graph = new GraphAI(graphString, agents);
+  const result = await graph.run();
+  // console.log(logIds);
+
+  assert.deepStrictEqual(result, { updateText: { text: "hello" } });
 });

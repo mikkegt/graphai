@@ -1,8 +1,11 @@
-import { AgentFunction, AgentFunctionInfo } from "graphai";
+import { AgentFunction, AgentFunctionInfo, assert } from "graphai";
+import { isNamedInputs } from "@graphai/agent_utils";
 
-export const copy2ArrayAgent: AgentFunction<{ count: number }> = async ({ inputs, params }) => {
+export const copy2ArrayAgent: AgentFunction<{ count: number }> = async ({ namedInputs, params }) => {
+  assert(isNamedInputs(namedInputs), "copy2ArrayAgent: namedInputs is UNDEFINED!");
+  const input = namedInputs.item ? namedInputs.item : namedInputs;
   return new Array(params.count).fill(undefined).map(() => {
-    return inputs[0];
+    return input;
   });
 };
 
@@ -13,7 +16,7 @@ const copy2ArrayAgentInfo: AgentFunctionInfo = {
   mock: copy2ArrayAgent,
   samples: [
     {
-      inputs: [{ message: "hello" }],
+      inputs: { item: { message: "hello" } },
       params: { count: 10 },
       result: [
         { message: "hello" },
@@ -28,9 +31,31 @@ const copy2ArrayAgentInfo: AgentFunctionInfo = {
         { message: "hello" },
       ],
     },
+    {
+      inputs: { message: "hello" },
+      params: { count: 10 },
+      result: [
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+        { message: "hello" },
+      ],
+    },
+    {
+      inputs: { item: "hello" },
+      params: { count: 10 },
+      result: ["hello", "hello", "hello", "hello", "hello", "hello", "hello", "hello", "hello", "hello"],
+    },
   ],
   description: "Copy2Array agent",
   category: ["test"],
+  cacheType: "pureAgent",
   author: "Receptron team",
   repository: "https://github.com/receptron/graphai",
   license: "MIT",

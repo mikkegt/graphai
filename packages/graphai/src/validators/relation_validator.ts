@@ -1,54 +1,65 @@
-import { GraphData } from "@/type";
-import { parseNodeName } from "@/utils/utils";
-import { ValidationError } from "@/validators/common";
+import { GraphData } from "../type";
+import { parseNodeName, isComputedNodeData, isStaticNodeData } from "../utils/utils";
+import { inputs2dataSources, dataSourceNodeIds } from "../utils/nodeUtils";
+import { ValidationError } from "./common";
 
-export const relationValidator = (data: GraphData, staticNodeIds: string[], computedNodeIds: string[]) => {
-  const nodeIds = new Set<string>(Object.keys(data.nodes));
+export const relationValidator = (graphData: GraphData, staticNodeIds: string[], computedNodeIds: string[]) => {
+  const nodeIds = new Set<string>(Object.keys(graphData.nodes));
 
   const pendings: Record<string, Set<string>> = {};
   const waitlist: Record<string, Set<string>> = {};
 
   // validate input relation and set pendings and wait list
   computedNodeIds.forEach((computedNodeId) => {
-    const nodeData = data.nodes[computedNodeId];
+    const nodeData = graphData.nodes[computedNodeId];
     pendings[computedNodeId] = new Set<string>();
-    if ("inputs" in nodeData && nodeData && nodeData.inputs) {
-      if (Array.isArray(nodeData.inputs)) {
-        nodeData.inputs.forEach((inputNodeId) => {
-          const sourceNodeId = parseNodeName(inputNodeId, data.version ?? 0.2).nodeId;
-          if (sourceNodeId) {
-            if (!nodeIds.has(sourceNodeId)) {
-              throw new ValidationError(`Inputs not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
-            }
-            waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set<string>());
-            pendings[computedNodeId].add(sourceNodeId);
-            waitlist[sourceNodeId].add(computedNodeId);
+
+    const dataSourceValidator = (sourceType: string, sourceNodeIds: string[]) => {
+      sourceNodeIds.forEach((sourceNodeId) => {
+        if (sourceNodeId) {
+          if (!nodeIds.has(sourceNodeId)) {
+            throw new ValidationError(`${sourceType} not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
           }
-        });
-      } else {
-        const keys = Object.keys(nodeData.inputs);
-        keys.forEach((key) => {
-          const inputNodeId = (nodeData.inputs as Record<string, any>)[key];
-          const sourceNodeId = parseNodeName(inputNodeId, data.version ?? 0.3).nodeId;
-          if (sourceNodeId) {
-            if (!nodeIds.has(sourceNodeId)) {
-              throw new ValidationError(`Inputs not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
-            }
-            waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set<string>());
-            pendings[computedNodeId].add(sourceNodeId);
-            waitlist[sourceNodeId].add(computedNodeId);
-          }
-        });
+          waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set<string>());
+          pendings[computedNodeId].add(sourceNodeId);
+          waitlist[sourceNodeId].add(computedNodeId);
+        }
+      });
+    };
+    if (nodeData && isComputedNodeData(nodeData)) {
+      if (nodeData.inputs) {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources(nodeData.inputs));
+        dataSourceValidator("Inputs", sourceNodeIds);
+      }
+      if (nodeData.params) {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources(nodeData.params));
+        dataSourceValidator("Params", sourceNodeIds);
+      }
+      if (nodeData.if) {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources({ if: nodeData.if }));
+        dataSourceValidator("If", sourceNodeIds);
+      }
+      if (nodeData.unless) {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources({ unless: nodeData.unless }));
+        dataSourceValidator("Unless", sourceNodeIds);
+      }
+      if (nodeData.graph && typeof nodeData?.graph === "string") {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources({ graph: nodeData.graph }));
+        dataSourceValidator("Graph", sourceNodeIds);
+      }
+      if (typeof nodeData.agent === "string" && nodeData.agent[0] === ":") {
+        const sourceNodeIds = dataSourceNodeIds(inputs2dataSources({ agent: nodeData.agent }));
+        dataSourceValidator("Agent", sourceNodeIds);
       }
     }
   });
 
   // TODO. validate update
   staticNodeIds.forEach((staticNodeId) => {
-    const nodeData = data.nodes[staticNodeId];
-    if ("value" in nodeData && nodeData.update) {
+    const nodeData = graphData.nodes[staticNodeId];
+    if (isStaticNodeData(nodeData) && nodeData.update) {
       const update = nodeData.update;
-      const updateNodeId = parseNodeName(update, data.version ?? 0.2).nodeId;
+      const updateNodeId = parseNodeName(update).nodeId;
       if (!updateNodeId) {
         throw new ValidationError("Update it a literal");
       }

@@ -1,7 +1,9 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
 export declare const mapAgent: AgentFunction<{
-    namedInputs?: Array<string>;
     limit?: number;
-}, Record<string, any>, any>;
+    resultAll?: boolean;
+    compositeResult?: boolean;
+    throwError?: boolean;
+}, Record<string, any>>;
 declare const mapAgentInfo: AgentFunctionInfo;
 export default mapAgentInfo;

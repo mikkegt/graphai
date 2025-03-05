@@ -28,20 +28,20 @@ class WordStreamer {
 
 const theMessage = "May the force be with you.";
 
-const graphdata_any = {
+const graphDataStream = {
   version: 0.5,
   nodes: {
     message: {
       value: theMessage,
     },
     source: {
-      agent: (message: string) => {
-        return new WordStreamer(message);
+      agent: ({ text }: { text: string }) => {
+        return new WordStreamer(text);
       },
-      inputs: [":message"],
+      inputs: { text: ":message" },
     },
     destination: {
-      agent: (streamer: WordStreamer) => {
+      agent: ({ streamer }: { streamer: WordStreamer }) => {
         const words = new Array<string>();
         return new Promise((resolve) => {
           streamer.run();
@@ -55,12 +55,12 @@ const graphdata_any = {
         });
       },
       isResult: true,
-      inputs: [":source"],
+      inputs: { streamer: ":source" },
     },
   },
 };
 
 test("test streamer object", async () => {
-  const result = await graphDataTestRunner(__dirname, __filename, graphdata_any, agents, () => {}, false);
+  const result = await graphDataTestRunner(__dirname, __filename, graphDataStream, agents, () => {}, false);
   assert.deepStrictEqual(result, { destination: theMessage });
 });

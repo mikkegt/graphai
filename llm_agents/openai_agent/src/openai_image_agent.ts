@@ -1,37 +1,31 @@
 import OpenAI from "openai";
 import { AgentFunction, AgentFunctionInfo } from "graphai";
 
-type InputType = string | (string | undefined)[] | undefined;
+import { GraphAILLMInputBase, getMergeValue } from "@graphai/llm_utils";
 
 type OpenAIInputs = {
   model?: string;
-  prompt?: InputType;
-  system?: InputType;
-  mergeablePrompts?: InputType;
-  mergeableSystem?: InputType;
+} & GraphAILLMInputBase;
+
+type OpenAIConfig = {
   baseURL?: string;
   apiKey?: string;
   forWeb?: boolean;
 };
 
-// export for test
-export const flatString = (input: InputType) => {
-  return Array.isArray(input) ? input.filter((a) => a).join("\n") : (input ?? "");
-};
+type OpenAIParams = OpenAIInputs & OpenAIConfig;
 
-// export for test
-export const getMergeValue = (namedInputs: OpenAIInputs, params: OpenAIInputs, key: "mergeablePrompts" | "mergeableSystem", values: InputType) => {
-  const inputValue = namedInputs[key];
-  const paramsValue = params[key];
-
-  return inputValue || paramsValue ? [flatString(inputValue), flatString(paramsValue)].filter((a) => a).join("\n") : flatString(values);
-};
-
-export const openAIImageAgent: AgentFunction<OpenAIInputs, Record<string, any> | string, string | Array<any>, OpenAIInputs> = async ({
+export const openAIImageAgent: AgentFunction<OpenAIParams, Record<string, any> | string, OpenAIInputs, OpenAIConfig> = async ({
   params,
   namedInputs,
+  config,
 }) => {
-  const { system, baseURL, apiKey, prompt, forWeb } = { ...params, ...namedInputs };
+  const { system, prompt } = { ...params, ...namedInputs };
+
+  const { apiKey, baseURL, forWeb } = {
+    ...params,
+    ...(config || {}),
+  };
 
   const userPrompt = getMergeValue(namedInputs, params, "mergeablePrompts", prompt);
   const systemPrompt = getMergeValue(namedInputs, params, "mergeableSystem", system);
@@ -70,6 +64,7 @@ const openAIImageAgentInfo: AgentFunctionInfo = {
   license: "MIT",
   stream: false,
   npms: ["openai"],
+  environmentVariables: ["OPENAI_API_KEY"],
 };
 
 export default openAIImageAgentInfo;

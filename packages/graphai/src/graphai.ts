@@ -3,58 +3,63 @@ import {
   AgentFilterInfo,
   GraphData,
   DataSource,
-  DataSources,
   LoopData,
   ResultDataDictionary,
   ResultData,
-  ResultDataSet,
   DefaultResultData,
   GraphOptions,
-  NestedDataSource,
-} from "@/type";
-import { TransactionLog } from "@/transaction_log";
+  PropFunction,
+  GraphDataLoader,
+  ConfigDataDictionary,
+  CallbackFunction,
+} from "./type";
+import { TransactionLog } from "./transaction_log";
 
-import { ComputedNode, StaticNode } from "@/node";
-import { parseNodeName, assert, getDataFromSource, isLogicallyTrue } from "@/utils/utils";
-import { validateGraphData } from "@/validator";
+import { ComputedNode, StaticNode, GraphNodes } from "./node";
+
+import { resultsOf, resultOf, cleanResult } from "./utils/result";
+import { propFunctions } from "./utils/prop_function";
+import { parseNodeName, assert, isLogicallyTrue, isComputedNodeData } from "./utils/utils";
+import { getDataFromSource } from "./utils/data_source";
+
+import { validateGraphData, validateAgent } from "./validator";
 import { TaskManager } from "./task_manager";
-
-type GraphNodes = Record<string, ComputedNode | StaticNode>;
 
 export const defaultConcurrency = 8;
 export const graphDataLatestVersion = 0.5;
 
 export class GraphAI {
   public readonly version: number;
-  private readonly graphId: string;
-  private readonly data: GraphData;
+  public readonly graphId: string;
+  private readonly graphData: GraphData;
   private readonly loop?: LoopData;
   private readonly logs: Array<TransactionLog> = [];
-  private readonly bypassAgentIds: string[];
-  public readonly config?: Record<string, unknown> = {};
+  public readonly bypassAgentIds: string[];
+  public readonly config?: ConfigDataDictionary = {};
   public readonly agentFunctionInfoDictionary: AgentFunctionInfoDictionary;
   public readonly taskManager: TaskManager;
   public readonly agentFilters: AgentFilterInfo[];
   public readonly retryLimit?: number;
+  public readonly propFunctions: PropFunction[];
+  public readonly graphLoader?: GraphDataLoader;
 
   public nodes: GraphNodes;
-  public onLogCallback = (__log: TransactionLog, __isUpdate: boolean) => {};
+  public onLogCallback: CallbackFunction = (__log: TransactionLog, __isUpdate: boolean) => {};
+  public callbacks: CallbackFunction[] = [];
   public verbose: boolean; // REVIEW: Do we need this?
 
-  private onComplete: () => void;
+  private onComplete: (isAbort: boolean) => void;
   private repeatCount = 0;
 
   // This method is called when either the GraphAI obect was created,
   // or we are about to start n-th iteration (n>2).
-  private createNodes(data: GraphData) {
-    const nodes = Object.keys(data.nodes).reduce((_nodes: GraphNodes, nodeId: string) => {
-      const nodeData = data.nodes[nodeId];
-      if ("value" in nodeData) {
-        _nodes[nodeId] = new StaticNode(nodeId, nodeData, this);
-      } else if ("agent" in nodeData) {
+  private createNodes(graphData: GraphData) {
+    const nodes = Object.keys(graphData.nodes).reduce((_nodes: GraphNodes, nodeId: string) => {
+      const nodeData = graphData.nodes[nodeId];
+      if (isComputedNodeData(nodeData)) {
         _nodes[nodeId] = new ComputedNode(this.graphId, nodeId, nodeData, this);
       } else {
-        throw new Error("Unknown node type (neither value nor agent): " + nodeId);
+        _nodes[nodeId] = new StaticNode(nodeId, nodeData, this);
       }
       return _nodes;
     }, {});
@@ -76,65 +81,86 @@ export class GraphAI {
   }
 
   private getValueFromResults(source: DataSource, results: ResultDataDictionary<DefaultResultData>) {
-    return getDataFromSource(source.nodeId ? results[source.nodeId] : undefined, source);
+    return getDataFromSource(source.nodeId ? results[source.nodeId] : undefined, source, this.propFunctions);
   }
 
   // for static
-  private initializeNodes(previousResults?: ResultDataDictionary<DefaultResultData>) {
+  private initializeStaticNodes(enableConsoleLog: boolean = false) {
     // If the result property is specified, inject it.
     // If the previousResults exists (indicating we are in a loop),
     // process the update property (nodeId or nodeId.propId).
-    Object.keys(this.data.nodes).forEach((nodeId) => {
+    Object.keys(this.graphData.nodes).forEach((nodeId) => {
       const node = this.nodes[nodeId];
       if (node?.isStaticNode) {
         const value = node?.value;
-        if (value) {
+        if (value !== undefined) {
           this.injectValue(nodeId, value, nodeId);
         }
+        if (enableConsoleLog) {
+          node.consoleLog();
+        }
+      }
+    });
+  }
+
+  private updateStaticNodes(previousResults?: ResultDataDictionary<DefaultResultData>, enableConsoleLog: boolean = false) {
+    // If the result property is specified, inject it.
+    // If the previousResults exists (indicating we are in a loop),
+    // process the update property (nodeId or nodeId.propId).
+    Object.keys(this.graphData.nodes).forEach((nodeId) => {
+      const node = this.nodes[nodeId];
+      if (node?.isStaticNode) {
         const update = node?.update;
         if (update && previousResults) {
           const result = this.getValueFromResults(update, previousResults);
           this.injectValue(nodeId, result, update.nodeId);
+        }
+        if (enableConsoleLog) {
+          node.consoleLog();
         }
       }
     });
   }
 
   constructor(
-    data: GraphData,
+    graphData: GraphData,
     agentFunctionInfoDictionary: AgentFunctionInfoDictionary,
     options: GraphOptions = {
       taskManager: undefined,
       agentFilters: [],
       bypassAgentIds: [],
       config: {},
+      graphLoader: undefined,
     },
   ) {
-    if (!data.version && !options.taskManager) {
+    if (!graphData.version && !options.taskManager) {
       console.warn("------------ missing version number");
     }
-    this.version = data.version ?? graphDataLatestVersion;
+    this.version = graphData.version ?? graphDataLatestVersion;
     if (this.version < graphDataLatestVersion) {
       console.warn(`------------ upgrade to ${graphDataLatestVersion}!`);
     }
-    this.retryLimit = data.retry; // optional
+    this.retryLimit = graphData.retry; // optional
     this.graphId = URL.createObjectURL(new Blob()).slice(-36);
-    this.data = data;
+    this.graphData = graphData;
     this.agentFunctionInfoDictionary = agentFunctionInfoDictionary;
-    this.taskManager = options.taskManager ?? new TaskManager(data.concurrency ?? defaultConcurrency);
+    this.propFunctions = propFunctions;
+    this.taskManager = options.taskManager ?? new TaskManager(graphData.concurrency ?? defaultConcurrency);
     this.agentFilters = options.agentFilters ?? [];
     this.bypassAgentIds = options.bypassAgentIds ?? [];
     this.config = options.config;
-    this.loop = data.loop;
-    this.verbose = data.verbose === true;
-    this.onComplete = () => {
+    this.graphLoader = options.graphLoader;
+    this.loop = graphData.loop;
+    this.verbose = graphData.verbose === true;
+    this.onComplete = (__isAbort: boolean) => {
       throw new Error("SOMETHING IS WRONG: onComplete is called without run()");
     };
 
-    validateGraphData(data, [...Object.keys(agentFunctionInfoDictionary), ...this.bypassAgentIds]);
+    validateGraphData(graphData, [...Object.keys(agentFunctionInfoDictionary), ...this.bypassAgentIds]);
+    validateAgent(agentFunctionInfoDictionary);
 
-    this.nodes = this.createNodes(data);
-    this.initializeNodes();
+    this.nodes = this.createNodes(graphData);
+    this.initializeStaticNodes(true);
   }
 
   public getAgentFunctionInfo(agentId?: string) {
@@ -146,7 +172,9 @@ export class GraphAI {
         agent: async () => {
           return null;
         },
+        hasGraphData: false,
         inputs: null,
+        cacheType: undefined, // for node.getContext
       };
     }
     // We are not supposed to hit this error because the validator will catch it.
@@ -219,8 +247,15 @@ export class GraphAI {
 
   // Public API
   public async run<T = DefaultResultData>(all: boolean = false): Promise<ResultDataDictionary<T>> {
+    if (
+      Object.values(this.nodes)
+        .filter((node) => node.isStaticNode)
+        .some((node) => node.result === undefined && node.update === undefined)
+    ) {
+      throw new Error("Static node must have value. Set value or injectValue or set update");
+    }
     if (this.isRunning()) {
-      throw new Error("This GraphUI instance is already running");
+      throw new Error("This GraphAI instance is already running");
     }
 
     this.pushReadyNodesIntoQueue();
@@ -231,15 +266,33 @@ export class GraphAI {
     }
 
     return new Promise((resolve, reject) => {
-      this.onComplete = () => {
+      this.onComplete = (isAbort: boolean = false) => {
         const errors = this.errors();
         const nodeIds = Object.keys(errors);
-        if (nodeIds.length > 0) {
+        if (nodeIds.length > 0 || isAbort) {
           reject(errors[nodeIds[0]]);
         } else {
           resolve(this.results(all));
         }
       };
+    });
+  }
+
+  public abort() {
+    if (this.isRunning()) {
+      this.resetPending();
+    }
+    // For an agent like an event agent, where an external promise remains unresolved,
+    // aborting and then retrying can cause nodes or the graph to execute again.
+    // To prevent this, the transactionId is updated to ensure the retry fails.
+    Object.values(this.nodes).forEach((node) => node.isComputedNode && (node.transactionId = undefined));
+    this.onComplete(this.isRunning());
+  }
+  public resetPending() {
+    Object.values(this.nodes).map((node) => {
+      if (node.isComputedNode) {
+        node.resetPending();
+      }
     });
   }
 
@@ -254,7 +307,7 @@ export class GraphAI {
     if (this.isRunning() || this.processLoopIfNecessary()) {
       return; // continue running
     }
-    this.onComplete(); // Nothing to run. Finish it.
+    this.onComplete(false); // Nothing to run. Finish it.
   }
 
   // Must be called only from onExecutionComplete righ after removeRunning
@@ -263,27 +316,41 @@ export class GraphAI {
   private processLoopIfNecessary() {
     this.repeatCount++;
     const loop = this.loop;
-    if (loop && (loop.count === undefined || this.repeatCount < loop.count)) {
-      const results = this.results(true); // results from previous loop
+    if (!loop) {
+      return false;
+    }
 
-      this.nodes = this.createNodes(this.data);
-      this.initializeNodes(results);
+    // We need to update static nodes, before checking the condition
+    const previousResults = this.results(true); // results from previous loop
+    this.updateStaticNodes(previousResults);
 
-      // Notice that we need to check the while condition *after* calling initializeNodes.
+    if (loop.count === undefined || this.repeatCount < loop.count) {
       if (loop.while) {
-        const source = parseNodeName(loop.while, this.version);
+        const source = parseNodeName(loop.while);
         const value = this.getValueFromResults(source, this.results(true));
         // NOTE: We treat an empty array as false.
         if (!isLogicallyTrue(value)) {
           return false; // while condition is not met
         }
       }
+      this.initializeGraphAI();
+      this.updateStaticNodes(previousResults, true);
       this.pushReadyNodesIntoQueue();
       return true; // Indicating that we are going to continue.
     }
     return false;
   }
 
+  public initializeGraphAI() {
+    if (this.isRunning()) {
+      throw new Error("This GraphAI instance is running");
+    }
+    this.nodes = this.createNodes(this.graphData);
+    this.initializeStaticNodes();
+  }
+  public setPreviousResults(previousResults: ResultDataDictionary<DefaultResultData>) {
+    this.updateStaticNodes(previousResults);
+  }
   public setLoopLog(log: TransactionLog) {
     log.isLoop = !!this.loop;
     log.repeatCount = this.repeatCount;
@@ -292,10 +359,20 @@ export class GraphAI {
   public appendLog(log: TransactionLog) {
     this.logs.push(log);
     this.onLogCallback(log, false);
+    this.callbacks.forEach((callback) => callback(log, false));
   }
 
   public updateLog(log: TransactionLog) {
     this.onLogCallback(log, true);
+    this.callbacks.forEach((callback) => callback(log, false));
+  }
+
+  public registerCallback(callback: CallbackFunction) {
+    this.callbacks.push(callback);
+  }
+
+  public clearCallbacks() {
+    this.callbacks = [];
   }
 
   // Public API
@@ -313,24 +390,14 @@ export class GraphAI {
     }
   }
 
-  private nestedResultOf(source: DataSources): ResultDataSet {
-    if (Array.isArray(source)) {
-      return source.map((a) => {
-        return this.nestedResultOf(a);
-      });
+  public resultsOf(inputs?: Record<string, any>, anyInput: boolean = false) {
+    const results = resultsOf(inputs ?? [], this.nodes, this.propFunctions);
+    if (anyInput) {
+      return cleanResult(results);
     }
-    return this.resultOf(source);
-  }
-
-  public resultsOf(sources: NestedDataSource) {
-    const ret: Record<string, ResultData | undefined> = {};
-    Object.keys(sources).forEach((key) => {
-      ret[key] = this.nestedResultOf(sources[key]);
-    });
-    return ret;
+    return results;
   }
   public resultOf(source: DataSource) {
-    const { result } = source.nodeId ? this.nodes[source.nodeId] : { result: undefined };
-    return getDataFromSource(result, source);
+    return resultOf(source, this.nodes, this.propFunctions);
   }
 }

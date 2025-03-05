@@ -2,52 +2,61 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.relationValidator = void 0;
 const utils_1 = require("../utils/utils");
-const common_1 = require("../validators/common");
-const relationValidator = (data, staticNodeIds, computedNodeIds) => {
-    const nodeIds = new Set(Object.keys(data.nodes));
+const nodeUtils_1 = require("../utils/nodeUtils");
+const common_1 = require("./common");
+const relationValidator = (graphData, staticNodeIds, computedNodeIds) => {
+    const nodeIds = new Set(Object.keys(graphData.nodes));
     const pendings = {};
     const waitlist = {};
     // validate input relation and set pendings and wait list
     computedNodeIds.forEach((computedNodeId) => {
-        const nodeData = data.nodes[computedNodeId];
+        const nodeData = graphData.nodes[computedNodeId];
         pendings[computedNodeId] = new Set();
-        if ("inputs" in nodeData && nodeData && nodeData.inputs) {
-            if (Array.isArray(nodeData.inputs)) {
-                nodeData.inputs.forEach((inputNodeId) => {
-                    const sourceNodeId = (0, utils_1.parseNodeName)(inputNodeId, data.version ?? 0.2).nodeId;
-                    if (sourceNodeId) {
-                        if (!nodeIds.has(sourceNodeId)) {
-                            throw new common_1.ValidationError(`Inputs not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
-                        }
-                        waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set());
-                        pendings[computedNodeId].add(sourceNodeId);
-                        waitlist[sourceNodeId].add(computedNodeId);
+        const dataSourceValidator = (sourceType, sourceNodeIds) => {
+            sourceNodeIds.forEach((sourceNodeId) => {
+                if (sourceNodeId) {
+                    if (!nodeIds.has(sourceNodeId)) {
+                        throw new common_1.ValidationError(`${sourceType} not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
                     }
-                });
+                    waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set());
+                    pendings[computedNodeId].add(sourceNodeId);
+                    waitlist[sourceNodeId].add(computedNodeId);
+                }
+            });
+        };
+        if (nodeData && (0, utils_1.isComputedNodeData)(nodeData)) {
+            if (nodeData.inputs) {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)(nodeData.inputs));
+                dataSourceValidator("Inputs", sourceNodeIds);
             }
-            else {
-                const keys = Object.keys(nodeData.inputs);
-                keys.forEach((key) => {
-                    const inputNodeId = nodeData.inputs[key];
-                    const sourceNodeId = (0, utils_1.parseNodeName)(inputNodeId, data.version ?? 0.3).nodeId;
-                    if (sourceNodeId) {
-                        if (!nodeIds.has(sourceNodeId)) {
-                            throw new common_1.ValidationError(`Inputs not match: NodeId ${computedNodeId}, Inputs: ${sourceNodeId}`);
-                        }
-                        waitlist[sourceNodeId] === undefined && (waitlist[sourceNodeId] = new Set());
-                        pendings[computedNodeId].add(sourceNodeId);
-                        waitlist[sourceNodeId].add(computedNodeId);
-                    }
-                });
+            if (nodeData.params) {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)(nodeData.params));
+                dataSourceValidator("Params", sourceNodeIds);
+            }
+            if (nodeData.if) {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)({ if: nodeData.if }));
+                dataSourceValidator("If", sourceNodeIds);
+            }
+            if (nodeData.unless) {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)({ unless: nodeData.unless }));
+                dataSourceValidator("Unless", sourceNodeIds);
+            }
+            if (nodeData.graph && typeof nodeData?.graph === "string") {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)({ graph: nodeData.graph }));
+                dataSourceValidator("Graph", sourceNodeIds);
+            }
+            if (typeof nodeData.agent === "string" && nodeData.agent[0] === ":") {
+                const sourceNodeIds = (0, nodeUtils_1.dataSourceNodeIds)((0, nodeUtils_1.inputs2dataSources)({ agent: nodeData.agent }));
+                dataSourceValidator("Agent", sourceNodeIds);
             }
         }
     });
     // TODO. validate update
     staticNodeIds.forEach((staticNodeId) => {
-        const nodeData = data.nodes[staticNodeId];
-        if ("value" in nodeData && nodeData.update) {
+        const nodeData = graphData.nodes[staticNodeId];
+        if ((0, utils_1.isStaticNodeData)(nodeData) && nodeData.update) {
             const update = nodeData.update;
-            const updateNodeId = (0, utils_1.parseNodeName)(update, data.version ?? 0.2).nodeId;
+            const updateNodeId = (0, utils_1.parseNodeName)(update).nodeId;
             if (!updateNodeId) {
                 throw new common_1.ValidationError("Update it a literal");
             }

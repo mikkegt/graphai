@@ -29,6 +29,13 @@ exports.args = yargs_1.default
     default: false,
     type: "boolean",
 })
+    .option("a", {
+    alias: "all",
+    describe: "all result",
+    demandOption: true,
+    default: false,
+    type: "boolean",
+})
     .option("m", {
     alias: "mermaid",
     describe: "mermaid",
@@ -52,6 +59,12 @@ exports.args = yargs_1.default
     description: "output log",
     demandOption: false,
     type: "string",
+})
+    .option("i", {
+    alias: "injectValue",
+    description: "injectValue for static node",
+    demandOption: false,
+    type: "array",
 })
     .command(exports.hasOption ? "* [yaml_or_json_file]" : "* <yaml_or_json_file>", "run GraphAI with GraphAI file.")
     .positional("yaml_or_json_file", {

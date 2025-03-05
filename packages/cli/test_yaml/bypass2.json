@@ -13,17 +13,19 @@
       "graph": {
         "version": 0.5,
         "nodes": {
-          "bypassAgent": {
-            "agent": "bypassAgent",
-            "inputs": [":row"],
+          "copyAgent": {
+            "agent": "copyAgent",
+            "params": { "namedKey": "item" },
+            "inputs": { "item": [":row"] },
             "isResult": true
           }
         }
       }
     },
-    "bypassAgent2": {
-      "agent": "bypassAgent",
-      "inputs": [":mapNode.bypassAgent"],
+    "copyAgent2": {
+      "agent": "copyAgent",
+      "params": { "namedKey": "item" },
+      "inputs": { "item": [":mapNode"] },
       "isResult": true
     }
   }

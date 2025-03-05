@@ -1,6 +1,5 @@
 import { AgentFunction, AgentFunctionInfo } from "graphai";
-export declare const popAgent: AgentFunction<Record<string, any>, Record<string, any>, Array<any>, {
-    array: Array<unknown>;
-}>;
+import type { GraphAIArray, GraphAIArrayWithItem } from "@graphai/agent_utils";
+export declare const popAgent: AgentFunction<null, GraphAIArrayWithItem, GraphAIArray>;
 declare const popAgentInfo: AgentFunctionInfo;
 export default popAgentInfo;

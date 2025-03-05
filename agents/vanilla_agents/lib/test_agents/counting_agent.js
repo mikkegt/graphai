@@ -16,13 +16,14 @@ const countingAgentInfo = {
     mock: exports.countingAgent,
     samples: [
         {
-            inputs: [],
+            inputs: {},
             params: { count: 4 },
             result: { list: [0, 1, 2, 3] },
         },
     ],
     description: "Counting agent",
     category: ["test"],
+    cacheType: "pureAgent",
     author: "Receptron team",
     repository: "https://github.com/receptron/graphai",
     license: "MIT",

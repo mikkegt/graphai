@@ -1,28 +1,16 @@
-import { DataSource, ResultData, AgentFunction } from "@/type";
+import { DataSource, AgentFunction, AgentFunctionInfo, NodeData, StaticNodeData, ComputedNodeData, NodeState } from "../type";
 
 export const sleep = async (milliseconds: number) => {
   return await new Promise((resolve) => setTimeout(resolve, milliseconds));
 };
 
-const parseNodeName_02 = (inputNodeId: any): DataSource => {
-  if (typeof inputNodeId === "string") {
-    const regex = /^"(.*)"$/;
-    const match = inputNodeId.match(regex);
-    if (match) {
-      return { value: match[1] }; // string literal
+export const parseNodeName = (inputNodeId: any, isSelfNode: boolean = false): DataSource => {
+  if (isSelfNode) {
+    if (typeof inputNodeId === "string" && inputNodeId[0] === ".") {
+      const parts = inputNodeId.split(".");
+      return { nodeId: "self", propIds: parts.slice(1) };
     }
-    const parts = inputNodeId.split(".");
-    if (parts.length == 1) {
-      return { nodeId: parts[0] };
-    }
-    return { nodeId: parts[0], propIds: parts.slice(1) };
-  }
-  return { value: inputNodeId }; // non-string literal
-};
-
-export const parseNodeName = (inputNodeId: any, version: number): DataSource => {
-  if (version === 0.2) {
-    return parseNodeName_02(inputNodeId);
+    return { value: inputNodeId };
   }
   if (typeof inputNodeId === "string") {
     const regex = /^:(.*)$/;
@@ -48,44 +36,12 @@ export function assert(condition: boolean, message: string, isWarn: boolean = fa
   }
 }
 
-export const isObject = (x: unknown) => {
+export const isObject = <Values = unknown>(x: unknown): x is Record<string, Values> => {
   return x !== null && typeof x === "object";
 };
 
-const getNestedData = (result: ResultData, propId: string) => {
-  if (Array.isArray(result)) {
-    const regex = /^\$(\d+)$/;
-    const match = propId.match(regex);
-    if (match) {
-      const index = parseInt(match[1], 10);
-      return result[index];
-    }
-    if (propId === "$last") {
-      return result[result.length - 1];
-    }
-  } else if (isObject(result)) {
-    return (result as Record<string, any>)[propId];
-  }
-  return undefined;
-};
-
-const innerGetDataFromSource = (result: ResultData, propIds: string[] | undefined): ResultData | undefined => {
-  if (result && propIds && propIds.length > 0) {
-    const propId = propIds[0];
-    const ret = getNestedData(result, propId);
-    if (propIds.length > 1) {
-      return innerGetDataFromSource(ret, propIds.slice(1));
-    }
-    return ret;
-  }
-  return result;
-};
-
-export const getDataFromSource = (result: ResultData | undefined, source: DataSource): ResultData | undefined => {
-  if (!source.nodeId) {
-    return source.value;
-  }
-  return innerGetDataFromSource(result, source.propIds);
+export const isNull = (data: unknown) => {
+  return data === null || data === undefined;
 };
 
 export const strIntentionalError = "Intentional Error for Debugging";
@@ -106,7 +62,7 @@ export const defaultAgentInfo = {
   license: "",
 };
 
-export const agentInfoWrapper = (agent: AgentFunction<any, any, any, any>) => {
+export const agentInfoWrapper = (agent: AgentFunction<any, any, any, any>): AgentFunctionInfo => {
   return {
     agent,
     mock: agent,
@@ -165,9 +121,23 @@ export const defaultTestContext = {
     nodeId: "test",
     retry: 0,
     verbose: true,
+    state: NodeState.Executing,
+    subGraphs: new Map(),
   },
   params: {},
   filterParams: {},
   agents: {},
   log: [],
+};
+
+export const isNamedInputs = <Values = unknown>(namedInputs: unknown): namedInputs is Record<string, Values> => {
+  return isObject(namedInputs) && !Array.isArray(namedInputs) && Object.keys(namedInputs || {}).length > 0;
+};
+
+export const isComputedNodeData = (node: NodeData): node is ComputedNodeData => {
+  return "agent" in node;
+};
+
+export const isStaticNodeData = (node: NodeData): node is StaticNodeData => {
+  return !("agent" in node);
 };

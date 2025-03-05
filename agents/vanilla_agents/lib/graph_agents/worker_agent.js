@@ -29,20 +29,23 @@ if (!worker_threads_1.isMainThread && worker_threads_1.parentPort) {
         port.postMessage(result);
     });
 }
-const workerAgent = async ({ inputs, params, /* agents, log, */ graphData }) => {
-    const namedInputs = params.namedInputs ?? inputs.map((__input, index) => `$${index}`);
+const workerAgent = async ({ namedInputs, /* agents, log, */ forNestedGraph }) => {
+    const { graphData } = forNestedGraph ?? {};
     (0, graphai_1.assert)(!!graphData, "required");
     (0, graphai_1.assert)(typeof graphData === "object", "required");
-    namedInputs.forEach((nodeId, index) => {
-        if (graphData.nodes[nodeId] === undefined) {
-            // If the input node does not exist, automatically create a static node
-            graphData.nodes[nodeId] = { value: inputs[index] };
-        }
-        else {
-            // Otherwise, inject the proper data here (instead of calling injectTo method later)
-            graphData.nodes[nodeId]["value"] = inputs[index];
-        }
-    });
+    const nodeIds = Object.keys(namedInputs);
+    if (nodeIds.length > 0) {
+        nodeIds.forEach((nodeId) => {
+            if (graphData.nodes[nodeId] === undefined) {
+                // If the input node does not exist, automatically create a static node
+                graphData.nodes[nodeId] = { value: namedInputs[nodeId] };
+            }
+            else {
+                // Otherwise, inject the proper data here (instead of calling injectTo method later)
+                graphData.nodes[nodeId]["value"] = namedInputs[nodeId];
+            }
+        });
+    }
     return new Promise((resolve, reject) => {
         const worker = new worker_threads_1.Worker(__dirname + "/worker_agent");
         worker.on("message", (result) => {
@@ -67,16 +70,16 @@ const workerAgentInfo = {
         {
             inputs: [],
             params: {},
-            result: { message: "May the force be with you" },
+            result: { message: { text: "May the force be with you" } },
             graph: {
-                version: 0.3,
+                version: 0.5,
                 nodes: {
                     source: {
                         value: "May the force be with you",
                     },
                     message: {
                         agent: "copyAgent",
-                        inputs: [":source"],
+                        inputs: { text: ":source" },
                         isResult: true,
                     },
                 },
@@ -85,16 +88,16 @@ const workerAgentInfo = {
         {
             inputs: ["May the force be with you"],
             params: {},
-            result: { message: "May the force be with you" },
+            result: { message: { text: "May the force be with you" } },
             graph: {
-                version: 0.3,
+                version: 0.5,
                 nodes: {
                     source: {
                         value: "TypeScript compiler fails without this node for some reason.",
                     },
                     message: {
                         agent: "copyAgent",
-                        inputs: [":$0"],
+                        inputs: { text: ":$0" },
                         isResult: true,
                     },
                 },
